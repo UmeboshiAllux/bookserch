@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>次の一冊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:       #1a1714;
+  --ink-mid:   #4a4540;
+  --ink-faint: #8a847c;
+  --ink-ghost: #bfbab2;
+  --paper:     #f7f4ef;
+  --paper-2:   #edeae3;
+  --white:     #ffffff;
+  --border:    rgba(26,23,20,0.14);
+  --border-s:  rgba(26,23,20,0.22);
+  --blue:      #2d4a8a;
+  --blue-bg:   #edf0f8;
+  --red:       #8a2d2d;
+  --red-bg:    #f8eded;
+  --green:     #2a6b3c;
+  --green-bg:  #eaf3ec;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Noto Sans JP', sans-serif;
+  font-weight: 300;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 1.25rem 6rem;
+}
+
+header {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-s);
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+}
+.site-title {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 1.2rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+.site-sub { font-size: 0.68rem; color: var(--ink-faint); }
+
+main { width: 100%; max-width: 640px; }
+
+.label {
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 0.6rem;
+}
+
+/* source indicator */
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.65rem;
+  padding: 3px 9px;
+  border-radius: 99px;
+  border: 1px solid var(--border-s);
+  color: var(--ink-faint);
+}
+.source-badge.online  { color: var(--green); background: var(--green-bg); border-color: rgba(42,107,60,0.2); }
+.source-badge.offline { color: var(--ink-faint); background: var(--paper-2); }
+.source-badge.error   { color: var(--red); background: var(--red-bg); border-color: rgba(138,45,45,0.2); }
+.source-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+/* mode toggle */
+.mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-s);
+  border-radius: 99px;
+  padding: 2px;
+  background: var(--white);
+}
+.mode-btn {
+  font-size: 0.68rem;
+  padding: 4px 12px;
+  border: none;
+  border-radius: 99px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink-faint);
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.mode-btn.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+.mode-btn:hover:not(.active) { background: var(--paper-2); }
+.retry-link {
+  font-size: 0.65rem;
+  color: var(--blue);
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 0;
+  display: none;
+}
+.error-detail {
+  font-size: 0.6rem;
+  color: var(--ink-ghost);
+  margin-top: 4px;
+  display: none;
+  word-break: break-all;
+}
+.toggle-wrap { margin-bottom: 1.5rem; }
+
+/* google books key */
+.gbkey-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+.gbkey-row input {
+  flex: 1;
+  min-width: 160px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  font-family: monospace;
+  font-size: 0.74rem;
+  color: var(--ink);
+  padding: 2px 0;
+  outline: none;
+}
+.gbkey-row input:focus { border-bottom-color: var(--blue); }
+.gbkey-row label { font-size: 0.68rem; color: var(--ink-faint); white-space: nowrap; }
+.gbkey-save {
+  font-size: 0.66rem;
+  padding: 3px 10px;
+  border: 1px solid var(--border-s);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink-mid);
+  font-family: 'Noto Sans JP', sans-serif;
+}
+.gbkey-save:hover { background: var(--paper-2); }
+.gbkey-help {
+  font-size: 0.62rem;
+  color: var(--ink-ghost);
+  margin-top: 4px;
+}
+.gbkey-help a { color: var(--blue); }
+.gbkey-ok { font-size: 0.65rem; color: var(--green); }
+
+/* book inputs */
+.books-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 1.75rem;
+}
+.book-input-card {
+  background: var(--white);
+  border: 1px solid var(--border-s);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  transition: border-color 0.15s;
+}
+.book-input-card:focus-within { border-color: var(--blue); }
+.book-input-card .num {
+  font-size: 0.6rem;
+  color: var(--ink-ghost);
+  letter-spacing: 0.1em;
+  margin-bottom: 0.3rem;
+}
+.book-input-card input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 300;
+  color: var(--ink);
+  outline: none;
+}
+.book-input-card input::placeholder { color: var(--ink-ghost); }
+
+/* radar */
+.radar-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.1rem 1rem 0.8rem;
+  margin-bottom: 1.5rem;
+}
+.radar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.legend { display: flex; gap: 0.9rem; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.65rem; color: var(--ink-faint); }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+svg#radar { display: block; margin: 0 auto; overflow: visible; }
+
+/* button */
+.find-btn {
+  width: 100%;
+  padding: 0.9rem;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Noto Serif JP', serif;
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  transition: opacity 0.2s;
+  margin-bottom: 1.25rem;
+}
+.find-btn:hover:not(:disabled) { opacity: 0.82; }
+.find-btn:active:not(:disabled) { opacity: 0.65; }
+.find-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* progress */
+.progress { margin-bottom: 0.75rem; min-height: 1.2rem; }
+.step {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.72rem; color: var(--ink-faint); padding: 2px 0;
+}
+.dot-spin {
+  width: 10px; height: 10px;
+  border: 1.5px solid var(--border-s);
+  border-top-color: var(--ink-mid);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* error / notice */
+.notice {
+  font-size: 0.74rem;
+  border-radius: 5px;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 0.75rem;
+  white-space: pre-wrap;
+  display: none;
+}
+.notice.error  { color: var(--red);  background: var(--red-bg);  border: 1px solid rgba(138,45,45,0.2); }
+.notice.info   { color: var(--ink-mid); background: var(--paper-2); border: 1px solid var(--border-s); }
+
+/* result */
+.result-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.5rem;
+  display: none;
+  animation: fadeUp 0.3s ease;
+}
+.result-card.visible { display: block; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+.result-eyebrow {
+  font-size: 0.62rem; letter-spacing: 0.14em; color: var(--ink-faint);
+  text-transform: uppercase; margin-bottom: 0.5rem;
+}
+.result-title {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 1.35rem; font-weight: 400; letter-spacing: 0.03em;
+  line-height: 1.45; margin-bottom: 0.25rem;
+}
+.result-author { font-size: 0.78rem; color: var(--ink-mid); margin-bottom: 0.3rem; }
+.result-meta-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1rem; }
+.result-genre {
+  display: inline-block; font-size: 0.6rem; letter-spacing: 0.06em;
+  padding: 2px 8px; border-radius: 3px; background: var(--blue-bg); color: var(--blue);
+}
+.result-source {
+  display: inline-block; font-size: 0.6rem; letter-spacing: 0.06em;
+  padding: 2px 8px; border-radius: 3px; background: var(--paper-2); color: var(--ink-faint);
+}
+.result-reason {
+  font-size: 0.82rem; line-height: 1.9; color: var(--ink-mid); font-weight: 300;
+  border-left: 2px solid var(--border-s); padding-left: 1rem; margin-bottom: 1rem;
+}
+.match-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.62rem; color: var(--ink-faint); margin-bottom: 0.3rem;
+}
+.match-bar { height: 2px; background: var(--paper-2); border-radius: 2px; margin-bottom: 1rem; overflow: hidden; }
+.match-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.6s ease; }
+.lock-note {
+  font-size: 0.62rem; color: var(--ink-ghost);
+  display: flex; align-items: center; gap: 4px; margin-bottom: 1rem;
+}
+.result-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: 1rem;
+}
+.action-btn {
+  font-size: 0.72rem; padding: 6px 12px;
+  border: 1px solid var(--border-s); border-radius: 4px;
+  background: transparent; cursor: pointer; color: var(--ink-mid);
+  font-family: 'Noto Sans JP', sans-serif; transition: background 0.15s;
+}
+.action-btn:hover { background: var(--paper-2); }
+.action-btn.danger { color: var(--red); border-color: rgba(138,45,45,0.2); }
+.action-btn.danger:hover { background: var(--red-bg); }
+
+footer {
+  width: 100%; max-width: 640px;
+  margin-top: 2.5rem;
+  font-size: 0.62rem;
+  color: var(--ink-ghost);
+  text-align: center;
+  line-height: 1.7;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="site-title">次の一冊</span>
+  <span class="site-sub">パラメータ照合 × 静的サイト</span>
+</header>
+
+<main>
+
+  <div class="toggle-wrap">
+    <div class="mode-row">
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="mode-auto-btn" onclick="setMode('auto')">オンライン優先</button>
+        <button class="mode-btn" id="mode-offline-btn" onclick="setMode('offline')">常にオフライン</button>
+      </div>
+      <span class="source-badge offline" id="source-badge">
+        <span class="source-dot"></span>
+        <span id="source-badge-text">起動中…</span>
+      </span>
+    </div>
+    <button class="retry-link" id="retry-link" onclick="retryConnection()">→ オンライン接続を再試行</button>
+    <div class="error-detail" id="error-detail"></div>
+
+    <div class="gbkey-row">
+      <label for="gbkey-input">Google Books APIキー（任意・推奨）</label>
+      <input type="password" id="gbkey-input" placeholder="未設定でも動作します" autocomplete="off" spellcheck="false">
+      <button class="gbkey-save" onclick="saveGbKey()">保存</button>
+      <span class="gbkey-ok" id="gbkey-ok" style="display:none">✓ 設定済み</span>
+    </div>
+    <div class="gbkey-help">
+      キーなしでも動作しますが、429エラー（レート制限）が出る場合は設定を推奨します。
+      <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">無料キーの取得はこちら</a>
+      （Google Cloud Console → 認証情報 → APIキーを作成 → Books APIを有効化）
+    </div>
+  </div>
+
+  <span class="label">最近読んだ2冊</span>
+  <div class="books-grid">
+    <div class="book-input-card">
+      <div class="num">book 1</div>
+      <input type="text" id="b1" placeholder="書名（著者名も可）" value="ハーモニー 伊藤計劃">
+    </div>
+    <div class="book-input-card">
+      <div class="num">book 2</div>
+      <input type="text" id="b2" placeholder="書名（著者名も可）" value="ツインスターサイクロンランナウェイ 小川一水">
+    </div>
+  </div>
+
+  <div class="radar-card">
+    <div class="radar-header">
+      <span class="label" style="margin:0">パラメータ空間</span>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#9b8ec4"></div>book 1</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6aaa91"></div>book 2</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2d4a8a; box-shadow:0 0 0 2px #fff,0 0 0 3.5px #2d4a8a"></div>推薦</div>
+      </div>
+    </div>
+    <svg id="radar" viewBox="0 0 320 260" width="320" height="260"></svg>
+  </div>
+
+  <button class="find-btn" id="find-btn" onclick="onFind()">次の一冊を見つける</button>
+
+  <div class="notice error" id="error-notice"></div>
+  <div class="notice info"  id="info-notice"></div>
+  <div class="progress" id="progress"></div>
+
+  <div class="result-card" id="result-card">
+    <div class="result-eyebrow">推薦</div>
+    <div class="result-title"  id="r-title"></div>
+    <div class="result-author" id="r-author"></div>
+    <div class="result-meta-row">
+      <span class="result-genre"  id="r-genre"></span>
+      <span class="result-source" id="r-source"></span>
+    </div>
+    <div class="match-row"><span>パラメータ一致度</span><span id="r-match-pct"></span></div>
+    <div class="match-bar"><div class="match-fill" id="r-match-fill" style="width:0%"></div></div>
+    <div class="result-reason" id="r-reason"></div>
+    <div class="lock-note">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      選考アルゴリズムは非公開
+    </div>
+    <div class="result-actions">
+      <button class="action-btn" onclick="onRetry()">別の一冊 →</button>
+      <button class="action-btn danger" onclick="onAlreadyRead()">読んだことある — やり直し</button>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  本データは Google Books API（取得できない場合は内蔵データベース）を使用しています。<br>
+  完全無料・サーバー不要・APIキー不要の静的サイトです。
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// 定数: パラメータ軸
+// ═══════════════════════════════════════════════════════════
+const AXES = [
+  { key: 'sf',       label: 'SF/幻想'  },
+  { key: 'thought',  label: '思想密度' },
+  { key: 'emotion',  label: '感情強度' },
+  { key: 'darkness', label: '暗度'     },
+  { key: 'world',    label: '世界構築' },
+  { key: 'prose',    label: '文体'     },
+  { key: 'pace',     label: '疾走感'   },
+  { key: 'relation', label: '関係性'   },
+];
+
+// ═══════════════════════════════════════════════════════════
+// 既知の本のプリセットパラメータ（精度の高い手動評価）
+// ═══════════════════════════════════════════════════════════
+const PRESETS = {
+  'ハーモニー':                        { sf:.88, thought:.92, emotion:.72, darkness:.90, world:.85, prose:.78, pace:.62, relation:.68 },
+  'ツインスターサイクロンランナウェイ': { sf:.90, thought:.48, emotion:.80, darkness:.30, world:.82, prose:.55, pace:.90, relation:.88 },
+  '虐殺器官':       { sf:.95, thought:.90, emotion:.60, darkness:.92, world:.85, prose:.70, pace:.75, relation:.55 },
+  'ノルウェイの森':  { sf:.00, thought:.55, emotion:.90, darkness:.65, world:.25, prose:.80, pace:.42, relation:.82 },
+  '罪と罰':         { sf:.00, thought:.90, emotion:.92, darkness:.85, world:.45, prose:.85, pace:.40, relation:.75 },
+  '吾輩は猫である':  { sf:.05, thought:.75, emotion:.50, darkness:.25, world:.30, prose:.92, pace:.35, relation:.60 },
+  '人間失格':       { sf:.00, thought:.80, emotion:.95, darkness:.95, world:.20, prose:.88, pace:.45, relation:.60 },
+  '夜は短し歩けよ乙女': { sf:.40, thought:.50, emotion:.85, darkness:.10, world:.75, prose:.90, pace:.70, relation:.88 },
+  '雪国':           { sf:.00, thought:.60, emotion:.80, darkness:.55, world:.40, prose:.95, pace:.30, relation:.75 },
+  '星を継ぐもの':    { sf:.95, thought:.75, emotion:.30, darkness:.20, world:.90, prose:.45, pace:.60, relation:.40 },
+  'ソラリス':        { sf:.88, thought:.95, emotion:.70, darkness:.75, world:.90, prose:.80, pace:.35, relation:.60 },
+};
+
+// ═══════════════════════════════════════════════════════════
+// Google Books API ジャンル探索ヒント
+// (q=subject:キーワード で検索。毎回ランダムに変えて多様性を出す)
+// ═══════════════════════════════════════════════════════════
+const GENRE_QUERIES = [
+  'subject:fiction', 'subject:science+fiction', 'subject:fantasy',
+  'subject:mystery', 'subject:philosophy', 'subject:poetry',
+  'subject:horror', 'subject:biography', 'subject:essays',
+  'subject:literary+criticism', 'subject:romance', 'subject:history',
+  'subject:psychology', 'subject:short+stories', 'subject:drama',
+  'subject:adventure', 'subject:dystopia', 'subject:mythology',
+  '日本文学', 'SF小説', '現代詩', '哲学書', 'ミステリ小説',
+  '随筆', '純文学', '幻想文学',
+];
+
+// カテゴリ文字列 → パラメータ軸 のキーワード対応表
+const KEYWORD_MAP = {
+  sf:       ['science fiction', 'fantasy', 'dystopia', 'cyberpunk', 'space', 'sf', '幻想', 'SF'],
+  thought:  ['philosophy', 'ethics', 'political', 'social science', 'religion', '哲学', '思想'],
+  emotion:  ['romance', 'drama', 'family', 'psychology', 'grief', '恋愛', '感情'],
+  darkness: ['horror', 'true crime', 'war', 'tragedy', 'dystopia', 'thriller', 'ホラー', '怪奇'],
+  world:    ['fantasy', 'science fiction', 'mythology', 'fairy tales', 'adventure', '幻想', '神話'],
+  prose:    ['poetry', 'literary criticism', 'essays', 'literary collections', '詩', '随筆', '純文学'],
+  pace:     ['adventure', 'action', 'thriller', 'young adult', 'mystery', '冒険', 'ミステリ'],
+  relation: ['romance', 'family', 'friendship', 'biography', 'memoir', '家族', '友情'],
+};
+
+// ═══════════════════════════════════════════════════════════
+// 内蔵フォールバックデータベース（API失敗時用・50冊）
+// ═══════════════════════════════════════════════════════════
+const FALLBACK_BOOKS = [
+  { title:'虐殺器官', author:'伊藤計劃', genre:'軍事SF',
+    params:{sf:.95,thought:.90,emotion:.60,darkness:.92,world:.85,prose:.70,pace:.75,relation:.55} },
+  { title:'ゲンロン0 観光客の哲学', author:'東浩紀', genre:'哲学',
+    params:{sf:.05,thought:.98,emotion:.15,darkness:.40,world:.30,prose:.55,pace:.25,relation:.30} },
+  { title:'老人と宇宙', author:'ジョン・スコルジー', genre:'スペースオペラ',
+    params:{sf:.90,thought:.35,emotion:.65,darkness:.30,world:.80,prose:.40,pace:.88,relation:.70} },
+  { title:'星を継ぐもの', author:'ジェイムズ・P・ホーガン', genre:'ハードSF',
+    params:{sf:.95,thought:.75,emotion:.30,darkness:.20,world:.90,prose:.45,pace:.60,relation:.40} },
+  { title:'樹上のゆりかご', author:'荻原規子', genre:'青春小説',
+    params:{sf:.10,thought:.45,emotion:.85,darkness:.40,world:.55,prose:.70,pace:.55,relation:.90} },
+  { title:'ニューロマンサー', author:'ウィリアム・ギブスン', genre:'サイバーパンク',
+    params:{sf:.95,thought:.65,emotion:.50,darkness:.80,world:.95,prose:.88,pace:.80,relation:.50} },
+  { title:'銀河英雄伝説 第一巻', author:'田中芳樹', genre:'スペースオペラ',
+    params:{sf:.85,thought:.70,emotion:.65,darkness:.55,world:.92,prose:.60,pace:.70,relation:.75} },
+  { title:'われはロボット', author:'アイザック・アシモフ', genre:'SF短編',
+    params:{sf:.90,thought:.80,emotion:.35,darkness:.25,world:.75,prose:.50,pace:.65,relation:.45} },
+  { title:'天冥の標 I', author:'小川一水', genre:'宇宙SF',
+    params:{sf:.92,thought:.72,emotion:.70,darkness:.65,world:.95,prose:.65,pace:.68,relation:.78} },
+  { title:'ソラリス', author:'スタニスワフ・レム', genre:'哲学的SF',
+    params:{sf:.88,thought:.95,emotion:.70,darkness:.75,world:.90,prose:.80,pace:.35,relation:.60} },
+  { title:'ゼロ年代の想像力', author:'宇野常寛', genre:'批評',
+    params:{sf:.15,thought:.88,emotion:.25,darkness:.45,world:.20,prose:.60,pace:.40,relation:.30} },
+  { title:'ガラパゴス', author:'カート・ヴォネガット', genre:'文明批評',
+    params:{sf:.70,thought:.85,emotion:.55,darkness:.60,world:.72,prose:.82,pace:.60,relation:.50} },
+  { title:'キャッチャー・イン・ザ・ライ', author:'J・D・サリンジャー', genre:'文学',
+    params:{sf:.00,thought:.50,emotion:.92,darkness:.60,world:.20,prose:.90,pace:.55,relation:.75} },
+  { title:'アルジャーノンに花束を', author:'ダニエル・キイス', genre:'感動SF',
+    params:{sf:.55,thought:.75,emotion:.95,darkness:.85,world:.40,prose:.75,pace:.50,relation:.80} },
+  { title:'夏への扉', author:'ロバート・A・ハインライン', genre:'SF古典',
+    params:{sf:.85,thought:.40,emotion:.70,darkness:.20,world:.75,prose:.55,pace:.82,relation:.72} },
+  { title:'流れよわが涙、と警官は言った', author:'フィリップ・K・ディック', genre:'ディストピア',
+    params:{sf:.80,thought:.82,emotion:.72,darkness:.78,world:.80,prose:.72,pace:.62,relation:.55} },
+  { title:'スローターハウス5', author:'カート・ヴォネガット', genre:'反戦文学',
+    params:{sf:.65,thought:.80,emotion:.80,darkness:.75,world:.70,prose:.90,pace:.55,relation:.60} },
+  { title:'息吹', author:'テッド・チャン', genre:'ハードSF短編',
+    params:{sf:.80,thought:.95,emotion:.65,darkness:.45,world:.82,prose:.82,pace:.40,relation:.60} },
+  { title:'地球の長い午後', author:'ブライアン・オールディス', genre:'奇想SF',
+    params:{sf:.85,thought:.60,emotion:.55,darkness:.65,world:.95,prose:.75,pace:.58,relation:.50} },
+  { title:'闇の左手', author:'アーシュラ・K・ル＝グウィン', genre:'文学SF',
+    params:{sf:.82,thought:.88,emotion:.75,darkness:.55,world:.92,prose:.82,pace:.45,relation:.88} },
+  { title:'幼年期の終わり', author:'アーサー・C・クラーク', genre:'SF古典',
+    params:{sf:.92,thought:.82,emotion:.55,darkness:.70,world:.88,prose:.62,pace:.55,relation:.48} },
+  { title:'百年の孤独', author:'G・G・マルケス', genre:'マジックリアリズム',
+    params:{sf:.10,thought:.72,emotion:.85,darkness:.65,world:.90,prose:.98,pace:.30,relation:.85} },
+  { title:'図書館の魔女', author:'高田大介', genre:'ファンタジー',
+    params:{sf:.10,thought:.78,emotion:.70,darkness:.38,world:.95,prose:.85,pace:.42,relation:.82} },
+  { title:'エンダーのゲーム', author:'オースン・スコット・カード', genre:'宇宙戦争SF',
+    params:{sf:.90,thought:.68,emotion:.82,darkness:.62,world:.85,prose:.60,pace:.85,relation:.80} },
+  { title:'罪と罰', author:'ドストエフスキー', genre:'文学',
+    params:{sf:.00,thought:.90,emotion:.92,darkness:.85,world:.45,prose:.85,pace:.40,relation:.75} },
+  { title:'存在と時間', author:'マルティン・ハイデガー', genre:'哲学',
+    params:{sf:.00,thought:.98,emotion:.20,darkness:.50,world:.30,prose:.40,pace:.15,relation:.25} },
+  { title:'異邦人', author:'アルベール・カミュ', genre:'実存主義文学',
+    params:{sf:.00,thought:.92,emotion:.55,darkness:.80,world:.30,prose:.70,pace:.50,relation:.40} },
+  { title:'銀河ヒッチハイク・ガイド', author:'ダグラス・アダムス', genre:'コメディSF',
+    params:{sf:.90,thought:.55,emotion:.45,darkness:.15,world:.80,prose:.65,pace:.90,relation:.55} },
+  { title:'侍女の物語', author:'マーガレット・アトウッド', genre:'ディストピア',
+    params:{sf:.65,thought:.90,emotion:.85,darkness:.92,world:.78,prose:.78,pace:.50,relation:.55} },
+  { title:'モモ', author:'ミヒャエル・エンデ', genre:'ファンタジー',
+    params:{sf:.30,thought:.70,emotion:.75,darkness:.30,world:.85,prose:.70,pace:.50,relation:.85} },
+  { title:'山月記', author:'中島敦', genre:'純文学短編',
+    params:{sf:.05,thought:.80,emotion:.80,darkness:.70,world:.30,prose:.92,pace:.45,relation:.40} },
+  { title:'ハイペリオン', author:'ダン・シモンズ', genre:'宇宙叙事詩SF',
+    params:{sf:.92,thought:.88,emotion:.72,darkness:.70,world:.96,prose:.85,pace:.55,relation:.65} },
+  { title:'ソフィーの世界', author:'ヨースタイン・ゴルデル', genre:'哲学小説',
+    params:{sf:.20,thought:.92,emotion:.50,darkness:.20,world:.55,prose:.55,pace:.55,relation:.50} },
+  { title:'草の竪琴', author:'トルーマン・カポーティ', genre:'抒情文学',
+    params:{sf:.00,thought:.45,emotion:.78,darkness:.30,world:.40,prose:.92,pace:.35,relation:.78} },
+  { title:'すばらしい新世界', author:'オルダス・ハクスリー', genre:'ディストピア',
+    params:{sf:.75,thought:.92,emotion:.55,darkness:.85,world:.85,prose:.65,pace:.55,relation:.45} },
+  { title:'1984年', author:'ジョージ・オーウェル', genre:'ディストピア',
+    params:{sf:.55,thought:.95,emotion:.70,darkness:.95,world:.80,prose:.62,pace:.55,relation:.50} },
+  { title:'三体', author:'劉慈欣', genre:'ハードSF',
+    params:{sf:.95,thought:.78,emotion:.55,darkness:.65,world:.92,prose:.55,pace:.75,relation:.45} },
+  { title:'みずうみ', author:'川端康成', genre:'純文学',
+    params:{sf:.00,thought:.55,emotion:.85,darkness:.70,world:.30,prose:.90,pace:.30,relation:.65} },
+  { title:'カラマーゾフの兄弟', author:'ドストエフスキー', genre:'長編文学',
+    params:{sf:.00,thought:.95,emotion:.90,darkness:.75,world:.50,prose:.88,pace:.35,relation:.85} },
+  { title:'未来いる年代記', author:'レイ・ブラッドベリ', genre:'SF短編集',
+    params:{sf:.80,thought:.65,emotion:.75,darkness:.55,world:.78,prose:.85,pace:.50,relation:.55} },
+  { title:'動物農場', author:'ジョージ・オーウェル', genre:'政治寓話',
+    params:{sf:.20,thought:.90,emotion:.50,darkness:.65,world:.55,prose:.60,pace:.65,relation:.40} },
+  { title:'ペスト', author:'アルベール・カミュ', genre:'実存主義文学',
+    params:{sf:.00,thought:.88,emotion:.75,darkness:.80,world:.45,prose:.72,pace:.45,relation:.60} },
+  { title:'高い城の男', author:'フィリップ・K・ディック', genre:'歴史改変SF',
+    params:{sf:.70,thought:.85,emotion:.50,darkness:.70,world:.88,prose:.65,pace:.50,relation:.45} },
+  { title:'重力の虹', author:'トマス・ピンチョン', genre:'実験文学',
+    params:{sf:.40,thought:.90,emotion:.40,darkness:.65,world:.70,prose:.95,pace:.30,relation:.35} },
+  { title:'F植物園の巣穴', author:'梨木香歩', genre:'幻想文学',
+    params:{sf:.35,thought:.55,emotion:.65,darkness:.40,world:.70,prose:.80,pace:.40,relation:.55} },
+  { title:'al-Mu`jam', author:'未知の詩人', genre:'詩集',
+    params:{sf:.05,thought:.60,emotion:.80,darkness:.40,world:.30,prose:.95,pace:.20,relation:.45} },
+  { title:'草枕', author:'夏目漱石', genre:'純文学',
+    params:{sf:.00,thought:.75,emotion:.55,darkness:.30,world:.40,prose:.92,pace:.25,relation:.40} },
+  { title:'砂の女', author:'安部公房', genre:'不条理文学',
+    params:{sf:.25,thought:.85,emotion:.70,darkness:.78,world:.65,prose:.80,pace:.45,relation:.50} },
+  { title:'時砂の王', author:'小川一水', genre:'時間SF',
+    params:{sf:.90,thought:.65,emotion:.75,darkness:.45,world:.85,prose:.60,pace:.78,relation:.70} },
+];
+
+// ═══════════════════════════════════════════════════════════
+// 状態
+// ═══════════════════════════════════════════════════════════
+let rejected = [];
+let lastRec  = null;
+let vec1 = PRESETS['ハーモニー'];
+let vec2 = PRESETS['ツインスターサイクロンランナウェイ'];
+let apiAvailable = null; // null=未検証, true/false
+let userMode = 'auto';   // 'auto' = オンライン優先 / 'offline' = 常にオフライン
+let lastErrorDetail = '';
+let gbApiKey = '';       // Google Books APIキー（任意）
+
+function saveGbKey() {
+  const v = document.getElementById('gbkey-input').value.trim();
+  if (!v) return;
+  gbApiKey = v;
+  document.getElementById('gbkey-input').value = '••••••••••••••••';
+  document.getElementById('gbkey-input').disabled = true;
+  document.getElementById('gbkey-ok').style.display = 'inline';
+  // キーを設定したら即座に再接続を試す
+  if (userMode === 'auto') retryConnection();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ユーティリティ
+// ═══════════════════════════════════════════════════════════
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+function jitter01(seed, idx) {
+  const x = Math.sin(seed + idx * 999.77) * 10000;
+  return x - Math.floor(x);
+}
+function clamp01(v) { return Math.max(0.05, Math.min(0.95, v)); }
+
+function findPreset(title) {
+  for (const key of Object.keys(PRESETS)) {
+    if (title.includes(key) || key.includes(title)) return PRESETS[key];
+  }
+  return null;
+}
+
+// タイトル文字列だけからパラメータを推定（プリセットなし・カテゴリなしの最終手段）
+function paramsFromTitleHash(title) {
+  const seed = hashStr(title);
+  const out = {};
+  AXES.forEach((ax, i) => { out[ax.key] = clamp01(0.3 + jitter01(seed, i) * 0.5); });
+  return out;
+}
+
+// カテゴリ配列からパラメータを推定
+function paramsFromCategories(title, categories) {
+  const catText = (categories || []).join(' ').toLowerCase();
+  const seed = hashStr(title);
+  const out = {};
+  AXES.forEach((ax, i) => {
+    const keywords = KEYWORD_MAP[ax.key];
+    const hit = keywords.some(k => catText.includes(k.toLowerCase()));
+    const base = hit ? 0.55 : 0.25;
+    const j = (jitter01(seed, i) - 0.5) * 0.3;
+    out[ax.key] = clamp01(base + j);
+  });
+  return out;
+}
+
+function euclidean(a, b) {
+  return Math.sqrt(AXES.reduce((s, ax) => s + Math.pow((a[ax.key]||0) - (b[ax.key]||0), 2), 0));
+}
+
+function pickRandom(arr, n) {
+  const pool = [...arr], out = [];
+  for (let i = 0; i < n && pool.length; i++) {
+    out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════
+// レーダーチャート
+// ═══════════════════════════════════════════════════════════
+function drawRadar(v1, v2, vt) {
+  const svg = document.getElementById('radar');
+  const N = AXES.length, cx = 160, cy = 130, R = 95;
+  const angle = i => (Math.PI * 2 * i / N) - Math.PI / 2;
+  let html = '';
+
+  [0.25, 0.5, 0.75, 1].forEach(ratio => {
+    const pts = AXES.map((_, i) => {
+      const a = angle(i), d = R * ratio;
+      return `${cx + d*Math.cos(a)},${cy + d*Math.sin(a)}`;
+    }).join(' ');
+    html += `<polygon points="${pts}" fill="none" stroke="#dedad4" stroke-width="0.8"/>`;
+  });
+
+  AXES.forEach((ax, i) => {
+    const a = angle(i), x2 = cx + R*Math.cos(a), y2 = cy + R*Math.sin(a);
+    html += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="#dedad4" stroke-width="0.8"/>`;
+    const lx = cx + (R+18)*Math.cos(a), ly = cy + (R+18)*Math.sin(a);
+    const anchor = Math.abs(Math.cos(a)) < 0.15 ? 'middle' : Math.cos(a) > 0 ? 'start' : 'end';
+    html += `<text x="${lx}" y="${ly+4}" font-size="9" fill="#8a847c" text-anchor="${anchor}" font-family="Noto Sans JP,sans-serif">${ax.label}</text>`;
+  });
+
+  function polygon(v, color, op) {
+    if (!v) return '';
+    const pts = AXES.map((ax, i) => {
+      const a = angle(i), d = R * Math.max(0, Math.min(1, v[ax.key]||0));
+      return `${cx + d*Math.cos(a)},${cy + d*Math.sin(a)}`;
+    }).join(' ');
+    return `<polygon points="${pts}" fill="${color}" fill-opacity="${op}" stroke="${color}" stroke-width="1.5" stroke-opacity="0.7"/>`;
+  }
+  function dots(v, color, big) {
+    if (!v) return '';
+    return AXES.map((ax, i) => {
+      const a = angle(i), d = R * Math.max(0, Math.min(1, v[ax.key]||0));
+      const x = cx + d*Math.cos(a), y = cy + d*Math.sin(a);
+      return big
+        ? `<circle cx="${x}" cy="${y}" r="5" fill="${color}" stroke="#fff" stroke-width="2"/>`
+        : `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" opacity="0.85"/>`;
+    }).join('');
+  }
+
+  html += polygon(v1,'#9b8ec4',.12) + polygon(v2,'#6aaa91',.12);
+  if (vt) html += polygon(vt,'#2d4a8a',.15);
+  html += dots(v1,'#9b8ec4',false) + dots(v2,'#6aaa91',false);
+  if (vt) html += dots(vt,'#2d4a8a',true);
+
+  svg.innerHTML = html;
+}
+drawRadar(vec1, vec2, null);
+
+// ═══════════════════════════════════════════════════════════
+// UI ヘルパー
+// ═══════════════════════════════════════════════════════════
+function showError(msg) {
+  const el = document.getElementById('error-notice');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideError() { document.getElementById('error-notice').style.display = 'none'; }
+
+function showInfo(msg) {
+  const el = document.getElementById('info-notice');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideInfo() { document.getElementById('info-notice').style.display = 'none'; }
+
+function setProgress(msg) {
+  const el = document.getElementById('progress');
+  el.innerHTML = msg ? `<div class="step"><div class="dot-spin"></div><span>${msg}</span></div>` : '';
+}
+
+function updateSourceBadge(state, detail) {
+  // state: true (online) / false (offline-fallback) / 'error' / null (checking)
+  const badge = document.getElementById('source-badge');
+  const text  = document.getElementById('source-badge-text');
+  const retryLink = document.getElementById('retry-link');
+  const errDetail = document.getElementById('error-detail');
+
+  badge.classList.remove('online', 'offline', 'error');
+
+  if (state === true) {
+    badge.classList.add('online');
+    text.textContent = 'Google Books API 接続中（数百万冊から検索）';
+    retryLink.style.display = 'none';
+    errDetail.style.display = 'none';
+  } else if (state === false) {
+    badge.classList.add('offline');
+    text.textContent = '内蔵データベースで動作中（オフラインモード）';
+    retryLink.style.display = userMode === 'auto' ? 'inline' : 'none';
+    if (detail) {
+      lastErrorDetail = detail;
+      errDetail.textContent = '理由: ' + detail;
+      errDetail.style.display = 'block';
+    }
+  } else if (state === 'error') {
+    badge.classList.add('error');
+    text.textContent = '接続エラー（オフラインで継続中）';
+    retryLink.style.display = userMode === 'auto' ? 'inline' : 'none';
+  } else {
+    text.textContent = '起動中…';
+    retryLink.style.display = 'none';
+    errDetail.style.display = 'none';
+  }
+}
+
+function setMode(mode) {
+  userMode = mode;
+  document.getElementById('mode-auto-btn').classList.toggle('active', mode === 'auto');
+  document.getElementById('mode-offline-btn').classList.toggle('active', mode === 'offline');
+
+  if (mode === 'offline') {
+    updateSourceBadge(false, null);
+    document.getElementById('error-detail').style.display = 'none';
+    document.getElementById('retry-link').style.display = 'none';
+  } else {
+    checkApiOnLoad();
+  }
+}
+
+function retryConnection() {
+  updateSourceBadge(null);
+  checkApiOnLoad();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Google Books API
+// ═══════════════════════════════════════════════════════════
+async function fetchGoogleBooks(query, maxResults, isRetry) {
+  const startIndex = Math.floor(Math.random() * 60);
+  let url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`
+          + `&maxResults=${maxResults}&startIndex=${startIndex}&printType=books`;
+  if (gbApiKey) url += `&key=${encodeURIComponent(gbApiKey)}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (res.status === 429) {
+      // レート制限: 1回だけ少し待って再試行（キーなしの場合に多発するため）
+      if (!isRetry) {
+        await new Promise(r => setTimeout(r, 1500));
+        return fetchGoogleBooks(query, maxResults, true);
+      }
+      throw new Error('HTTP 429（レート制限）' + (gbApiKey ? '' : ' — APIキー未設定のため上限に達しやすくなっています'));
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status + '（' + query + '）');
+
+    const data = await res.json();
+    if (!data.items) return [];
+
+    return data.items
+      .map(item => {
+        const info = item.volumeInfo || {};
+        if (!info.title || !info.authors) return null;
+        return {
+          title: info.title,
+          author: info.authors.join(', '),
+          categories: info.categories || [],
+          genre: (info.categories && info.categories[0]) ? info.categories[0].split('/').pop().trim() : '一般',
+        };
+      })
+      .filter(Boolean);
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') throw new Error('タイムアウト（' + query + '）');
+    throw e.message ? e : new Error('ネットワークエラー（' + query + '）');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 候補プール取得（API優先、失敗時はフォールバック）
+// ═══════════════════════════════════════════════════════════
+async function getCandidatePool() {
+  // 「常にオフライン」モードならネットワークに一切触れない
+  if (userMode === 'offline') {
+    updateSourceBadge(false, null);
+    const fallback = FALLBACK_BOOKS.map(b => ({
+      title: b.title, author: b.author, genre: b.genre, params: b.params,
+    }));
+    return { books: fallback, source: '内蔵データベース' };
+  }
+
+  const queries = pickRandom(GENRE_QUERIES, 2); // 並列数を抑えてレート制限を回避
+
+  const settled = await Promise.allSettled(queries.map(q => fetchGoogleBooks(q, 25)));
+
+  const merged = [];
+  const errors = [];
+  settled.forEach(r => {
+    if (r.status === 'fulfilled') merged.push(...r.value);
+    else errors.push(r.reason ? (r.reason.message || String(r.reason)) : '不明なエラー');
+  });
+
+  // 重複排除
+  const seen = new Set();
+  const unique = merged.filter(b => {
+    const k = b.title.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  if (unique.length >= 5) {
+    apiAvailable = true;
+    updateSourceBadge(true);
+    return { books: unique, source: 'Google Books' };
+  }
+
+  // 全クエリ失敗 or 結果が少なすぎる場合のみフォールバック
+  apiAvailable = false;
+  const detail = errors.length > 0
+    ? errors[0] + (location.protocol === 'file:' ? '（file://で開いている場合はローカルサーバー経由を推奨）' : '')
+    : '候補が不足（' + unique.length + '件のみ取得）';
+  updateSourceBadge(false, detail);
+
+  const fallback = FALLBACK_BOOKS.map(b => ({
+    title: b.title, author: b.author, genre: b.genre, params: b.params,
+  }));
+  return { books: fallback, source: '内蔵データベース' };
+}
+
+// ═══════════════════════════════════════════════════════════
+// メインフロー
+// ═══════════════════════════════════════════════════════════
+async function onFind() {
+  hideError(); hideInfo();
+
+  const title1 = document.getElementById('b1').value.trim();
+  const title2 = document.getElementById('b2').value.trim();
+  if (!title1 || !title2) { showError('2冊のタイトルを入力してください'); return; }
+
+  document.getElementById('find-btn').disabled = true;
+  document.getElementById('result-card').classList.remove('visible');
+
+  try {
+    // ── 入力2冊のパラメータ取得 ──
+    setProgress('2冊のパラメータを取得中…');
+    const p1 = findPreset(title1);
+    const p2 = findPreset(title2);
+    vec1 = p1 || paramsFromTitleHash(title1);
+    vec2 = p2 || paramsFromTitleHash(title2);
+    drawRadar(vec1, vec2, null);
+
+    // ── 候補プール取得 ──
+    setProgress('本のデータベースを検索中…');
+    const { books, source } = await getCandidatePool();
+
+    // ── 各候補にパラメータを付与 ──
+    const candidates = books
+      .filter(b => !rejected.includes(b.title))
+      .map(b => ({
+        ...b,
+        params: b.params || paramsFromCategories(b.title, b.categories),
+      }));
+
+    if (candidates.length === 0) {
+      rejected = []; // リセットして再試行
+      setProgress('');
+      onFind();
+      return;
+    }
+
+    // ── ターゲットベクトル計算（中点 + ノイズ） ──
+    const mid = {};
+    AXES.forEach(ax => { mid[ax.key] = (vec1[ax.key] + vec2[ax.key]) / 2; });
+    const noiseSeed = Date.now() % 100000;
+    const target = {};
+    AXES.forEach((ax, i) => {
+      const n = (jitter01(noiseSeed, i) - 0.5) * 0.25;
+      target[ax.key] = clamp01(mid[ax.key] + n);
+    });
+
+    // ── 距離計算してソート ──
+    const scored = candidates.map(b => ({ book: b, dist: euclidean(b.params, target) }));
+    scored.sort((a, b) => a.dist - b.dist);
+
+    const topN = Math.min(5, scored.length);
+    const pick = scored[Math.floor(Math.random() * topN)];
+
+    rejected.push(pick.book.title);
+    lastRec = pick.book;
+
+    drawRadar(vec1, vec2, pick.book.params);
+    setProgress('');
+    renderResult(pick.book, pick.dist, source, target);
+
+  } catch (e) {
+    console.error(e);
+    setProgress('');
+    showError('エラーが発生しました: ' + (e.message || String(e)));
+  } finally {
+    document.getElementById('find-btn').disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 推薦理由テンプレート生成
+// ═══════════════════════════════════════════════════════════
+function generateReason(book, target, title1, title2) {
+  // どの軸がtargetと最も近いか
+  const diffs = AXES.map(ax => ({
+    label: ax.key,
+    name: ax.label,
+    d: Math.abs((book.params[ax.key]||0) - target[ax.key]),
+  })).sort((a, b) => a.d - b.d);
+
+  const closest = diffs.slice(0, 2).map(d => d.name);
+
+  // book1とbook2どちらに近いか
+  const distTo1 = euclidean(book.params, vec1);
+  const distTo2 = euclidean(book.params, vec2);
+  const closerTo = distTo1 < distTo2 ? title1 : title2;
+  const otherBook = distTo1 < distTo2 ? title2 : title1;
+
+  const templates = [
+    `「${closerTo}」とは${closest[0]}の点で深く共鳴しながら、「${otherBook}」が持つ${closest[1]}の感覚も静かに受け継いでいます。2冊の間にあった見えない糸を辿った先にある一冊です。`,
+    `${closest[0]}と${closest[1]}という軸において、あなたが読んだ2冊の中間地点にちょうど位置する作品です。「${closerTo}」の読書体験に近い質感を持ちながら、新しい視点を加えてくれるはずです。`,
+    `2冊のパラメータが交差する場所から見つけ出した一冊。${closest[0]}の強さは「${closerTo}」を、${closest[1]}の深さはもう一冊を思わせる、橋渡しのような読書体験になるでしょう。`,
+  ];
+
+  return templates[Math.floor(Math.random() * templates.length)];
+}
+
+// ═══════════════════════════════════════════════════════════
+// 結果レンダリング
+// ═══════════════════════════════════════════════════════════
+function renderResult(book, dist, source, target) {
+  const title1 = document.getElementById('b1').value.trim();
+  const title2 = document.getElementById('b2').value.trim();
+
+  document.getElementById('r-title').textContent  = book.title;
+  document.getElementById('r-author').textContent = book.author;
+  document.getElementById('r-genre').textContent  = book.genre || '一般';
+  document.getElementById('r-source').textContent = source;
+  document.getElementById('r-reason').textContent = generateReason(book, target, title1, title2);
+
+  const maxDist = Math.sqrt(AXES.length); // 全軸最大差の理論値
+  const pct = Math.max(45, Math.min(98, Math.round((1 - dist / maxDist) * 100)));
+  document.getElementById('r-match-pct').textContent = pct + '%';
+  document.getElementById('r-match-fill').style.width = pct + '%';
+
+  const card = document.getElementById('result-card');
+  card.classList.remove('visible');
+  void card.offsetWidth;
+  card.classList.add('visible');
+}
+
+function onRetry() { onFind(); }
+function onAlreadyRead() {
+  if (lastRec) rejected.push(lastRec.title + '（既読）');
+  onFind();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 起動時: API疎通確認（裏で軽くテスト）
+// ═══════════════════════════════════════════════════════════
+async function checkApiOnLoad() {
+  if (userMode === 'offline') {
+    updateSourceBadge(false, null);
+    return;
+  }
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 6000);
+    let probeUrl = 'https://www.googleapis.com/books/v1/volumes?q=test&maxResults=1';
+    if (gbApiKey) probeUrl += `&key=${encodeURIComponent(gbApiKey)}`;
+    const res = await fetch(probeUrl, { signal: controller.signal });
+    clearTimeout(t);
+    if (res.ok) {
+      updateSourceBadge(true);
+    } else if (res.status === 429) {
+      updateSourceBadge(false, 'HTTP 429（レート制限）' + (gbApiKey ? '' : ' — APIキーの設定を推奨します'));
+    } else {
+      updateSourceBadge(false, 'HTTP ' + res.status);
+    }
+  } catch (e) {
+    let detail = e.name === 'AbortError' ? 'タイムアウト' : (e.message || 'ネットワークエラー');
+    if (location.protocol === 'file:') {
+      detail += '（file://で開いている場合、ブラウザによってはこの起動方法だとブロックされることがあります。ローカルサーバー経由をお試しください）';
+    }
+    updateSourceBadge(false, detail);
+  }
+}
+checkApiOnLoad();
+</script>
+</body>
+</html>
