@@ -659,6 +659,118 @@ function paramsFromTitleHash(title) {
   return out;
 }
 
+// ═══════════════════════════════════════════════════════════
+// 実在検証（feature-truebooks）
+// 入力タイトルが実在の本かをGoogle Booksで確認し、
+// 見つからない場合も「最も近い実在書籍」を裏側で採用する。
+// ユーザーには差し替えたことを明示しない。
+// ═══════════════════════════════════════════════════════════
+
+// ひらがな → カタカナ変換（Unicode上、ひらがなとカタカナは+0x60の関係にある）
+function hiraganaToKatakana(s) {
+  return s.replace(/[\u3041-\u3096]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+}
+
+function normalizeForCompare(s) {
+  return hiraganaToKatakana((s || '').toLowerCase())
+    .replace(/[\s　]/g, '')
+    .replace(/[「」『』,，。.!！?？:：;；\-_~〜()（）]/g, '');
+}
+
+// 編集距離（レーベンシュタイン距離）
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + cost);
+    }
+  }
+  return dp[m][n];
+}
+
+// 0〜1のタイトル類似度（1=完全一致）
+function titleSimilarity(a, b) {
+  const na = normalizeForCompare(a), nb = normalizeForCompare(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85; // 部分一致は強めに評価
+  const dist = levenshtein(na, nb);
+  const maxLen = Math.max(na.length, nb.length);
+  return maxLen === 0 ? 0 : 1 - dist / maxLen;
+}
+
+// タイトルでGoogle Booksを検索（intitle:優先、ヒットなければ通常検索でも試行）
+async function searchGoogleBooksByTitle(title) {
+  async function doSearch(q) {
+    let url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}`
+            + `&maxResults=5&langRestrict=ja&country=JP`;
+    if (gbApiKey) url += `&key=${encodeURIComponent(gbApiKey)}`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 7000);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(t);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!data.items) return [];
+      return data.items.map(item => {
+        const info = item.volumeInfo || {};
+        if (!info.title || !info.authors) return null;
+        return { title: info.title, author: info.authors.join(', '), categories: info.categories || [] };
+      }).filter(Boolean);
+    } catch (e) {
+      clearTimeout(t);
+      return [];
+    }
+  }
+
+  let results = await doSearch(`intitle:${title}`);
+  if (results.length === 0) results = await doSearch(title); // intitle:が厳しすぎる場合の保険
+  return results;
+}
+
+// 入力タイトル1件を解決する: プリセット → 実在検証 → 類似本 → 最終手段としてハッシュ
+async function resolveBookEntry(title) {
+  const preset = findPreset(title);
+  if (preset) {
+    return { params: preset, verified: true, source: 'preset', resolvedTitle: title };
+  }
+
+  // オフラインモードではネットワークに触れずハッシュ推定のみ
+  if (userMode === 'offline') {
+    return { params: paramsFromTitleHash(title), verified: false, source: 'offline-hash', resolvedTitle: title };
+  }
+
+  try {
+    const results = await searchGoogleBooksByTitle(title);
+    if (results.length > 0) {
+      const scored = results.map(r => ({ r, sim: titleSimilarity(title, r.title) }));
+      scored.sort((a, b) => b.sim - a.sim);
+      const best = scored[0];
+      const params = paramsFromCategories(best.r.title, best.r.categories);
+      return {
+        params,
+        verified: best.sim >= 0.6,
+        source: best.sim >= 0.6 ? 'google-verified' : 'google-similar',
+        resolvedTitle: best.r.title,
+        resolvedAuthor: best.r.author,
+        similarity: best.sim,
+      };
+    }
+  } catch (e) {
+    // ネットワークエラー等は下のフォールバックへ
+  }
+
+  // 検索でも何も見つからない場合の最終手段
+  return { params: paramsFromTitleHash(title), verified: false, source: 'hash-fallback', resolvedTitle: title };
+}
+
 // カテゴリ配列からパラメータを推定
 function paramsFromCategories(title, categories) {
   const catText = (categories || []).join(' ').toLowerCase();
@@ -926,12 +1038,14 @@ async function onFind() {
   document.getElementById('result-card').classList.remove('visible');
 
   try {
-    // ── 入力2冊のパラメータ取得 ──
-    setProgress('2冊のパラメータを取得中…');
-    const p1 = findPreset(title1);
-    const p2 = findPreset(title2);
-    vec1 = p1 || paramsFromTitleHash(title1);
-    vec2 = p2 || paramsFromTitleHash(title2);
+    // ── 入力2冊のパラメータ取得（実在検証つき） ──
+    setProgress('2冊の本を確認中…');
+    const [entry1, entry2] = await Promise.all([
+      resolveBookEntry(title1),
+      resolveBookEntry(title2),
+    ]);
+    vec1 = entry1.params;
+    vec2 = entry2.params;
     drawRadar(vec1, vec2, null);
 
     // ── 候補プール取得 ──
