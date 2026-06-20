@@ -138,6 +138,59 @@ main { width: 100%; max-width: 640px; }
 }
 .toggle-wrap { margin-bottom: 1.5rem; }
 
+/* genre tag selector */
+.tag-selector-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1.75rem;
+}
+.tag-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+.tag-selector-clear {
+  font-size: 0.65rem;
+  color: var(--blue);
+  cursor: pointer;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  font-family: 'Noto Sans JP', sans-serif;
+  padding: 0;
+}
+.tag-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag-chip {
+  font-size: 0.7rem;
+  padding: 5px 12px;
+  border: 1px solid var(--border-s);
+  border-radius: 99px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink-mid);
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.tag-chip:hover { background: var(--paper-2); }
+.tag-chip.selected {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.tag-selector-hint {
+  font-size: 0.62rem;
+  color: var(--ink-ghost);
+  margin-top: 0.6rem;
+}
+
 /* google books key */
 .gbkey-row {
   display: flex;
@@ -384,6 +437,15 @@ footer {
     </div>
   </div>
 
+  <div class="tag-selector-card">
+    <div class="tag-selector-header">
+      <span class="label" style="margin:0">探索するジャンル（任意）</span>
+      <button class="tag-selector-clear" id="tag-clear-btn" onclick="clearTags()" style="display:none">クリア</button>
+    </div>
+    <div class="tag-chip-row" id="tag-chip-row"></div>
+    <div class="tag-selector-hint" id="tag-hint">未選択の場合は全ジャンルからランダムに探索します</div>
+  </div>
+
   <span class="label">最近読んだ2冊</span>
   <div class="books-grid">
     <div class="book-input-card">
@@ -477,19 +539,27 @@ const PRESETS = {
 };
 
 // ═══════════════════════════════════════════════════════════
-// Google Books API ジャンル探索ヒント
-// (q=subject:キーワード で検索。毎回ランダムに変えて多様性を出す)
+// ジャンルタグ（ユーザーが選択可能・選択時はそのタグのみ検索）
 // ═══════════════════════════════════════════════════════════
-const GENRE_QUERIES = [
-  'subject:fiction', 'subject:science+fiction', 'subject:fantasy',
-  'subject:mystery', 'subject:philosophy', 'subject:poetry',
-  'subject:horror', 'subject:biography', 'subject:essays',
-  'subject:literary+criticism', 'subject:romance', 'subject:history',
-  'subject:psychology', 'subject:short+stories', 'subject:drama',
-  'subject:adventure', 'subject:dystopia', 'subject:mythology',
-  '日本文学', 'SF小説', '現代詩', '哲学書', 'ミステリ小説',
-  '随筆', '純文学', '幻想文学',
+const GENRE_TAGS = [
+  { id: 'fiction',   label: '文学・小説',     query: 'subject:fiction' },
+  { id: 'sf',        label: 'SF',            query: 'subject:science+fiction' },
+  { id: 'fantasy',   label: 'ファンタジー',   query: 'subject:fantasy' },
+  { id: 'mystery',   label: 'ミステリ',      query: 'subject:mystery' },
+  { id: 'philosophy',label: '哲学・思想',    query: 'subject:philosophy' },
+  { id: 'poetry',    label: '詩・随筆',      query: 'subject:poetry' },
+  { id: 'horror',    label: 'ホラー・怪奇',  query: 'subject:horror' },
+  { id: 'biography', label: '伝記・歴史',    query: 'subject:biography' },
+  { id: 'essay',     label: 'エッセイ・批評',query: 'subject:essays' },
+  { id: 'romance',   label: '恋愛・青春',    query: 'subject:romance' },
+  { id: 'psychology',label: '心理・社会',    query: 'subject:psychology' },
+  { id: 'drama',     label: 'ドラマ・短編',  query: 'subject:short+stories' },
+  { id: 'jlit',      label: '日本文学',      query: '日本文学' },
+  { id: 'dystopia',  label: 'ディストピア',  query: 'subject:dystopia' },
 ];
+
+// 後方互換: 全タグのクエリ一覧（タグ未選択時のランダム探索用）
+const GENRE_QUERIES = GENRE_TAGS.map(t => t.query);
 
 // カテゴリ文字列 → パラメータ軸 のキーワード対応表
 const KEYWORD_MAP = {
@@ -618,6 +688,37 @@ let apiAvailable = null; // null=未検証, true/false
 let userMode = 'auto';   // 'auto' = オンライン優先 / 'offline' = 常にオフライン
 let lastErrorDetail = '';
 let gbApiKey = '';       // Google Books APIキー（任意）
+let selectedTagIds = []; // ユーザーが選択したジャンルタグID（空=全ジャンルランダム）
+
+function renderTagChips() {
+  const row = document.getElementById('tag-chip-row');
+  row.innerHTML = '';
+  GENRE_TAGS.forEach(tag => {
+    const btn = document.createElement('button');
+    btn.className = 'tag-chip' + (selectedTagIds.includes(tag.id) ? ' selected' : '');
+    btn.textContent = tag.label;
+    btn.onclick = () => toggleTag(tag.id);
+    row.appendChild(btn);
+  });
+  document.getElementById('tag-clear-btn').style.display = selectedTagIds.length > 0 ? 'inline' : 'none';
+  document.getElementById('tag-hint').textContent = selectedTagIds.length > 0
+    ? `選択中の${selectedTagIds.length}ジャンルから探索します`
+    : '未選択の場合は全ジャンルからランダムに探索します';
+}
+
+function toggleTag(id) {
+  const idx = selectedTagIds.indexOf(id);
+  if (idx === -1) selectedTagIds.push(id);
+  else selectedTagIds.splice(idx, 1);
+  renderTagChips();
+}
+
+function clearTags() {
+  selectedTagIds = [];
+  renderTagChips();
+}
+
+renderTagChips();
 
 function saveGbKey() {
   const v = document.getElementById('gbkey-input').value.trim();
@@ -861,19 +962,37 @@ async function fetchGoogleBooks(query, maxResults, isRetry) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// 選択タグと内蔵DBのgenre文字列をゆるくマッチング
+const TAG_GENRE_KEYWORDS = {
+  fiction: ['文学', '純文学', '小説'], sf: ['SF', 'sf'], fantasy: ['ファンタジー', '幻想'],
+  mystery: ['ミステリ'], philosophy: ['哲学', '思想', '実存'], poetry: ['詩', '随筆'],
+  horror: ['ホラー', '怪奇'], biography: ['伝記', '歴史'], essay: ['批評', 'エッセイ'],
+  romance: ['恋愛', '青春'], psychology: ['心理'], drama: ['短編', 'ドラマ'],
+  jlit: ['日本', '純文学'], dystopia: ['ディストピア'],
+};
+function filterFallbackByTags(books) {
+  if (selectedTagIds.length === 0) return books;
+  const keywords = selectedTagIds.flatMap(id => TAG_GENRE_KEYWORDS[id] || []);
+  const filtered = books.filter(b => keywords.some(kw => (b.genre || '').includes(kw)));
+  return filtered.length > 0 ? filtered : books; // マッチ0件なら全体にフォールバック
+}
+
 // 候補プール取得（API優先、失敗時はフォールバック）
 // ═══════════════════════════════════════════════════════════
 async function getCandidatePool() {
   // 「常にオフライン」モードならネットワークに一切触れない
   if (userMode === 'offline') {
     updateSourceBadge(false, null);
-    const fallback = FALLBACK_BOOKS.map(b => ({
+    const fallback = filterFallbackByTags(FALLBACK_BOOKS).map(b => ({
       title: b.title, author: b.author, genre: b.genre, params: b.params,
     }));
     return { books: fallback, source: '内蔵データベース' };
   }
 
-  const queries = pickRandom(GENRE_QUERIES, 2); // 並列数を抑えてレート制限を回避
+  // タグが選択されていれば選んだタグ全てを検索、未選択なら全ジャンルから2件ランダム抽出
+  const queries = selectedTagIds.length > 0
+    ? GENRE_TAGS.filter(t => selectedTagIds.includes(t.id)).map(t => t.query)
+    : pickRandom(GENRE_QUERIES, 2);
 
   const settled = await Promise.allSettled(queries.map(q => fetchGoogleBooks(q, 25)));
 
@@ -906,7 +1025,7 @@ async function getCandidatePool() {
     : '候補が不足（' + unique.length + '件のみ取得）';
   updateSourceBadge(false, detail);
 
-  const fallback = FALLBACK_BOOKS.map(b => ({
+  const fallback = filterFallbackByTags(FALLBACK_BOOKS).map(b => ({
     title: b.title, author: b.author, genre: b.genre, params: b.params,
   }));
   return { books: fallback, source: '内蔵データベース' };
