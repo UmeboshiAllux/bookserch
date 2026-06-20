@@ -818,7 +818,8 @@ function retryConnection() {
 async function fetchGoogleBooks(query, maxResults, isRetry) {
   const startIndex = Math.floor(Math.random() * 60);
   let url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`
-          + `&maxResults=${maxResults}&startIndex=${startIndex}&printType=books`;
+          + `&maxResults=${maxResults}&startIndex=${startIndex}&printType=books`
+          + `&langRestrict=ja&country=JP`; // 日本語版・日本で入手可能な本を優先
   if (gbApiKey) url += `&key=${encodeURIComponent(gbApiKey)}`;
 
   const controller = new AbortController();
@@ -850,6 +851,7 @@ async function fetchGoogleBooks(query, maxResults, isRetry) {
           author: info.authors.join(', '),
           categories: info.categories || [],
           genre: (info.categories && info.categories[0]) ? info.categories[0].split('/').pop().trim() : '一般',
+          language: info.language || 'ja',
         };
       })
       .filter(Boolean);
@@ -987,17 +989,74 @@ async function onFind() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 推薦理由テンプレート生成
+// 推薦理由生成（部品化方式 — APIを使わず組み合わせで多様性を確保）
+//
+// 設計: 文を「骨格」「軸の言い回し」「接続表現」「結びの一文」に分解。
+// それぞれ独立した乱数で選ぶことで、3骨格 × 6接続 × 8結び × 軸の言い回し
+// バリエーション ≒ 数百通り以上の組み合わせが生まれ、同じ文が連続しにくい。
 // ═══════════════════════════════════════════════════════════
+
+// 軸ラベルの言い換えバリエーション（同じ軸でも毎回違う言葉で表現する）
+const AXIS_PHRASES = {
+  sf:       ['SFや幻想の手触り', '現実離れした世界観の強さ', '幻想性の濃さ'],
+  thought:  ['思想の密度', '物事を深く問う姿勢', '哲学的な奥行き'],
+  emotion:  ['感情の振れ幅', '心の揺さぶられ方', '感情表現の強さ'],
+  darkness: ['物語の重さ', '世界観の暗さ', '結末の手触りの重さ'],
+  world:    ['世界の作り込み', '設定の緻密さ', '世界観の広がり'],
+  prose:    ['文章そのものの味わい', '文体の個性', '言葉選びの密度'],
+  pace:     ['物語の疾走感', 'テンポの良さ', '読み進める勢い'],
+  relation: ['登場人物同士の結びつき', '関係性の描かれ方', '絆の濃さ'],
+};
+
+// 接続表現（2つの近さをどう繋ぐか）
+const CONNECTORS = [
+  'と深く共鳴しながら、',
+  'という点で重なり合い、',
+  'の感触を静かに受け継ぎつつ、',
+  'を思わせる一方で、',
+  'と響き合う部分を持ちながら、',
+  'の感覚を引き継ぎつつ、',
+];
+
+// 結びの一文（どんな読書体験になるか）
+const CLOSERS = [
+  '新しい視点を加えてくれるはずです。',
+  '静かながらも記憶に残る読書体験になるでしょう。',
+  '思いがけない発見が待っているはずです。',
+  '読み終えたあとに2冊への見方も変わるかもしれません。',
+  'これまでにない角度から物語を味わえるはずです。',
+  '次に何を読むか、また新しい問いをくれる一冊です。',
+  '静かに視界が広がるような読書になるはずです。',
+];
+
+// 文の骨格（3パターン。どの骨格を使うかも乱数で決める）
+function buildSkeleton(skeletonIdx, closerTo, otherBook, axisA, axisB, connector, closer) {
+  switch (skeletonIdx) {
+    case 0:
+      return `「${closerTo}」とは${axisA}${connector}「${otherBook}」が持つ${axisB}も静かに重ねています。${closer}`;
+    case 1:
+      return `${axisA}と${axisB}という軸において、あなたが読んだ2冊のちょうど中間に位置する作品です。「${closerTo}」${connector}${closer}`;
+    default:
+      return `2冊のパラメータが交差する場所から見つけ出した一冊です。${axisA}は「${closerTo}」を、${axisB}はもう一冊を思わせます。${closer}`;
+  }
+}
+
+// シンプルな疑似乱数（タイトル＋現在時刻ベースのシードで毎回変化させる）
+function pickSeededRandom(arr, seed) {
+  const x = Math.sin(seed) * 10000;
+  const idx = Math.floor((x - Math.floor(x)) * arr.length);
+  return arr[Math.max(0, Math.min(arr.length - 1, idx))];
+}
+
 function generateReason(book, target, title1, title2) {
   // どの軸がtargetと最も近いか
   const diffs = AXES.map(ax => ({
-    label: ax.key,
+    key: ax.key,
     name: ax.label,
     d: Math.abs((book.params[ax.key]||0) - target[ax.key]),
   })).sort((a, b) => a.d - b.d);
 
-  const closest = diffs.slice(0, 2).map(d => d.name);
+  const topAxisKeys = [diffs[0].key, diffs[1].key];
 
   // book1とbook2どちらに近いか
   const distTo1 = euclidean(book.params, vec1);
@@ -1005,13 +1064,19 @@ function generateReason(book, target, title1, title2) {
   const closerTo = distTo1 < distTo2 ? title1 : title2;
   const otherBook = distTo1 < distTo2 ? title2 : title1;
 
-  const templates = [
-    `「${closerTo}」とは${closest[0]}の点で深く共鳴しながら、「${otherBook}」が持つ${closest[1]}の感覚も静かに受け継いでいます。2冊の間にあった見えない糸を辿った先にある一冊です。`,
-    `${closest[0]}と${closest[1]}という軸において、あなたが読んだ2冊の中間地点にちょうど位置する作品です。「${closerTo}」の読書体験に近い質感を持ちながら、新しい視点を加えてくれるはずです。`,
-    `2冊のパラメータが交差する場所から見つけ出した一冊。${closest[0]}の強さは「${closerTo}」を、${closest[1]}の深さはもう一冊を思わせる、橋渡しのような読書体験になるでしょう。`,
-  ];
+  // 毎回異なる組み合わせになるよう、呼び出しごとに変わるシードを使う
+  const baseSeed = Date.now() % 100000 + Math.random() * 1000;
 
-  return templates[Math.floor(Math.random() * templates.length)];
+  const axisA = pickSeededRandom(AXIS_PHRASES[topAxisKeys[0]] || ['この物語の質感'], baseSeed + 1);
+  const axisB = pickSeededRandom(AXIS_PHRASES[topAxisKeys[1]] || ['もう一つの側面'], baseSeed + 2);
+  const connector = pickSeededRandom(CONNECTORS, baseSeed + 3);
+  const closer = pickSeededRandom(CLOSERS, baseSeed + 4);
+  const skeletonIdx = Math.floor(Math.random() * 3);
+
+  return buildSkeleton(
+    skeletonIdx,
+    closerTo, otherBook, axisA, axisB, connector, closer
+  );
 }
 
 // ═══════════════════════════════════════════════════════════
