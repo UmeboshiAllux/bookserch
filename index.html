@@ -542,20 +542,20 @@ const PRESETS = {
 // ジャンルタグ（ユーザーが選択可能・選択時はそのタグのみ検索）
 // ═══════════════════════════════════════════════════════════
 const GENRE_TAGS = [
-  { id: 'fiction',   label: '文学・小説',     query: 'subject:fiction' },
-  { id: 'sf',        label: 'SF',            query: 'subject:science+fiction' },
-  { id: 'fantasy',   label: 'ファンタジー',   query: 'subject:fantasy' },
-  { id: 'mystery',   label: 'ミステリ',      query: 'subject:mystery' },
-  { id: 'philosophy',label: '哲学・思想',    query: 'subject:philosophy' },
-  { id: 'poetry',    label: '詩・随筆',      query: 'subject:poetry' },
-  { id: 'horror',    label: 'ホラー・怪奇',  query: 'subject:horror' },
-  { id: 'biography', label: '伝記・歴史',    query: 'subject:biography' },
-  { id: 'essay',     label: 'エッセイ・批評',query: 'subject:essays' },
-  { id: 'romance',   label: '恋愛・青春',    query: 'subject:romance' },
-  { id: 'psychology',label: '心理・社会',    query: 'subject:psychology' },
-  { id: 'drama',     label: 'ドラマ・短編',  query: 'subject:short+stories' },
-  { id: 'jlit',      label: '日本文学',      query: '日本文学' },
-  { id: 'dystopia',  label: 'ディストピア',  query: 'subject:dystopia' },
+  { id: 'fiction',   label: '文学・小説',     query: '小説' },
+  { id: 'sf',        label: 'SF',            query: 'SF小説' },
+  { id: 'fantasy',   label: 'ファンタジー',   query: 'ファンタジー小説' },
+  { id: 'mystery',   label: 'ミステリ',      query: 'ミステリ小説' },
+  { id: 'philosophy',label: '哲学・思想',    query: '哲学書' },
+  { id: 'poetry',    label: '詩・随筆',      query: '詩集 OR 随筆' },
+  { id: 'horror',    label: 'ホラー・怪奇',  query: 'ホラー小説 OR 怪奇小説' },
+  { id: 'biography', label: '伝記・歴史',    query: '伝記 OR 歴史小説' },
+  { id: 'essay',     label: 'エッセイ・批評',query: 'エッセイ OR 文芸批評' },
+  { id: 'romance',   label: '恋愛・青春',    query: '恋愛小説 OR 青春小説' },
+  { id: 'psychology',label: '心理・社会',    query: '心理学 OR 社会学' },
+  { id: 'drama',     label: 'ドラマ・短編',  query: '短編小説' },
+  { id: 'jlit',      label: '日本文学',      query: '日本文学 OR 純文学' },
+  { id: 'dystopia',  label: 'ディストピア',  query: 'ディストピア小説' },
 ];
 
 // 後方互換: 全タグのクエリ一覧（タグ未選択時のランダム探索用）
