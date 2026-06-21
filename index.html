@@ -450,11 +450,11 @@ footer {
   <div class="books-grid">
     <div class="book-input-card">
       <div class="num">book 1</div>
-      <input type="text" id="b1" placeholder="書名（著者名も可）" value="ハーモニー 伊藤計劃">
+      <input type="text" id="b1" placeholder="例: ハーモニー">
     </div>
     <div class="book-input-card">
       <div class="num">book 2</div>
-      <input type="text" id="b2" placeholder="書名（著者名も可）" value="ツインスターサイクロンランナウェイ 小川一水">
+      <input type="text" id="b2" placeholder="例: ツインスターサイクロンランナウェイ">
     </div>
   </div>
 
@@ -684,6 +684,8 @@ let rejected = [];
 let lastRec  = null;
 let vec1 = PRESETS['ハーモニー'];
 let vec2 = PRESETS['ツインスターサイクロンランナウェイ'];
+let resolvedTitle1 = ''; // 表示用のクリーンなタイトル（著者名等を含まない）
+let resolvedTitle2 = '';
 let apiAvailable = null; // null=未検証, true/false
 let userMode = 'auto';   // 'auto' = オンライン優先 / 'offline' = 常にオフライン
 let lastErrorDetail = '';
@@ -747,7 +749,7 @@ function clamp01(v) { return Math.max(0.05, Math.min(0.95, v)); }
 
 function findPreset(title) {
   for (const key of Object.keys(PRESETS)) {
-    if (title.includes(key) || key.includes(title)) return PRESETS[key];
+    if (title.includes(key) || key.includes(title)) return { params: PRESETS[key], canonicalTitle: key };
   }
   return null;
 }
@@ -840,7 +842,7 @@ async function searchGoogleBooksByTitle(title) {
 async function resolveBookEntry(title) {
   const preset = findPreset(title);
   if (preset) {
-    return { params: preset, verified: true, source: 'preset', resolvedTitle: title };
+    return { params: preset.params, verified: true, source: 'preset', resolvedTitle: preset.canonicalTitle };
   }
 
   // オフラインモードではネットワークに触れずハッシュ推定のみ
@@ -1091,6 +1093,34 @@ function filterFallbackByTags(books) {
   return filtered.length > 0 ? filtered : books; // マッチ0件なら全体にフォールバック
 }
 
+// フィクション系タグ（物語であることが期待されるタグ）
+const FICTION_LEANING_TAGS = ['fiction', 'sf', 'fantasy', 'mystery', 'horror', 'romance', 'drama', 'jlit', 'dystopia'];
+
+// Google Booksのcategoriesに現れる典型的なノンフィクション分類のキーワード
+const NONFICTION_SIGNAL_KEYWORDS = [
+  'self-help', 'business', 'cooking', 'travel', 'reference', 'education',
+  'study aids', 'computers', 'health & fitness', 'language arts', 'medical',
+  'law', 'technology', 'true crime', 'juvenile nonfiction', 'literary criticism',
+  'social science', 'biography', 'autobiography', 'self-help',
+  '自己啓発', 'ビジネス', '実用書',
+];
+
+// categoriesからフィクションかどうかを推定（フィクション系タグ選択時のみ使用）
+function looksLikeFiction(categories) {
+  if (!categories || categories.length === 0) return true; // 情報なしは除外しない（母数が減りすぎるため）
+  const catText = categories.join(' ').toLowerCase();
+  if (catText.includes('fiction')) return true; // "Fiction"系カテゴリが明示されていれば確実
+  const hasNonfictionSignal = NONFICTION_SIGNAL_KEYWORDS.some(kw => catText.includes(kw));
+  return !hasNonfictionSignal; // ノンフィクションの強いシグナルがなければ許容
+}
+
+function filterByFictionIntent(books) {
+  const hasFictionTag = selectedTagIds.some(id => FICTION_LEANING_TAGS.includes(id));
+  if (!hasFictionTag) return books; // フィクション系タグが1つも選ばれていなければ素通し
+  const filtered = books.filter(b => looksLikeFiction(b.categories));
+  return filtered.length >= 5 ? filtered : books; // 絞りすぎたら元に戻す
+}
+
 // 候補プール取得（API優先、失敗時はフォールバック）
 // ═══════════════════════════════════════════════════════════
 async function getCandidatePool() {
@@ -1119,12 +1149,15 @@ async function getCandidatePool() {
 
   // 重複排除
   const seen = new Set();
-  const unique = merged.filter(b => {
+  let unique = merged.filter(b => {
     const k = b.title.toLowerCase();
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
+
+  // フィクション系タグが選択されていればノンフィクションを除外
+  unique = filterByFictionIntent(unique);
 
   if (unique.length >= 5) {
     apiAvailable = true;
@@ -1167,6 +1200,10 @@ async function onFind() {
     ]);
     vec1 = entry1.params;
     vec2 = entry2.params;
+    // 表示用には実在検証で得られたクリーンなタイトルを使う
+    // （「ハーモニー 伊藤計劃」のような入力でも「ハーモニー」だけになる）
+    resolvedTitle1 = entry1.resolvedTitle || title1;
+    resolvedTitle2 = entry2.resolvedTitle || title2;
     drawRadar(vec1, vec2, null);
 
     // ── 候補プール取得 ──
@@ -1210,7 +1247,7 @@ async function onFind() {
 
     drawRadar(vec1, vec2, pick.book.params);
     setProgress('');
-    renderResult(pick.book, pick.dist, source, target);
+    renderResult(pick.book, pick.dist, source, target, resolvedTitle1, resolvedTitle2);
 
   } catch (e) {
     console.error(e);
@@ -1263,14 +1300,18 @@ const CLOSERS = [
 ];
 
 // 文の骨格（3パターン。どの骨格を使うかも乱数で決める）
-function buildSkeleton(skeletonIdx, closerTo, otherBook, axisA, axisB, connector, closer) {
+function buildSkeleton(skeletonIdx, closerTo, otherBook, axisA, axisB, connector, closer, useFormerLatter) {
+  // 「前者」「後者」表現の場合は鉤括弧をつけない（不自然になるため）
+  const closerLabel = useFormerLatter ? closerTo : `「${closerTo}」`;
+  const otherLabel   = useFormerLatter ? otherBook : `「${otherBook}」`;
+
   switch (skeletonIdx) {
     case 0:
-      return `「${closerTo}」とは${axisA}${connector}「${otherBook}」が持つ${axisB}も静かに重ねています。${closer}`;
+      return `${closerLabel}とは${axisA}${connector}${otherLabel}が持つ${axisB}も静かに重ねています。${closer}`;
     case 1:
-      return `${axisA}と${axisB}という軸において、あなたが読んだ2冊のちょうど中間に位置する作品です。「${closerTo}」${connector}${closer}`;
+      return `${axisA}と${axisB}という軸において、あなたが読んだ2冊のちょうど中間に位置する作品です。${closerLabel}${connector}${closer}`;
     default:
-      return `2冊のパラメータが交差する場所から見つけ出した一冊です。${axisA}は「${closerTo}」を、${axisB}はもう一冊を思わせます。${closer}`;
+      return `2冊のパラメータが交差する場所から見つけ出した一冊です。${axisA}は${closerLabel}を、${axisB}は${otherLabel}を思わせます。${closer}`;
   }
 }
 
@@ -1282,20 +1323,37 @@ function pickSeededRandom(arr, seed) {
 }
 
 function generateReason(book, target, title1, title2) {
-  // どの軸がtargetと最も近いか
+  // どの軸がtargetと最も近いか（上位4軸を候補とし、その中からランダムに2つ選ぶことで
+  // 「同じ2軸ばかり言及される」偏りを防ぐ。close軸が常に1位2位固定だと文章は変わっても
+  // 内容の使い回し感が出てしまうため）
   const diffs = AXES.map(ax => ({
     key: ax.key,
     name: ax.label,
     d: Math.abs((book.params[ax.key]||0) - target[ax.key]),
   })).sort((a, b) => a.d - b.d);
 
-  const topAxisKeys = [diffs[0].key, diffs[1].key];
+  const candidatePool = diffs.slice(0, 4); // 上位4軸を候補に
+  const shuffled = [...candidatePool].sort(() => Math.random() - 0.5);
+  const topAxisKeys = [shuffled[0].key, shuffled[1].key];
 
   // book1とbook2どちらに近いか
   const distTo1 = euclidean(book.params, vec1);
   const distTo2 = euclidean(book.params, vec2);
-  const closerTo = distTo1 < distTo2 ? title1 : title2;
-  const otherBook = distTo1 < distTo2 ? title2 : title1;
+  const closerIsFirst = distTo1 < distTo2;
+
+  // 表示形式をランダムに選ぶ:
+  //  - 「書名」のみ（クリーンなタイトル）
+  //  - 「前者」「後者」（入力欄の表記ゆれや冗長さを避けるための代替表現）
+  // 文章ごとにどちらを使うか変えることで、表現の幅も広がる
+  const useFormerLatter = Math.random() < 0.4; // 4割の確率で前者/後者表現を使う
+  let closerTo, otherBook;
+  if (useFormerLatter) {
+    closerTo  = closerIsFirst ? '前者' : '後者';
+    otherBook = closerIsFirst ? '後者' : '前者';
+  } else {
+    closerTo  = closerIsFirst ? title1 : title2;
+    otherBook = closerIsFirst ? title2 : title1;
+  }
 
   // 毎回異なる組み合わせになるよう、呼び出しごとに変わるシードを使う
   const baseSeed = Date.now() % 100000 + Math.random() * 1000;
@@ -1308,22 +1366,19 @@ function generateReason(book, target, title1, title2) {
 
   return buildSkeleton(
     skeletonIdx,
-    closerTo, otherBook, axisA, axisB, connector, closer
+    closerTo, otherBook, axisA, axisB, connector, closer, useFormerLatter
   );
 }
 
 // ═══════════════════════════════════════════════════════════
 // 結果レンダリング
 // ═══════════════════════════════════════════════════════════
-function renderResult(book, dist, source, target) {
-  const title1 = document.getElementById('b1').value.trim();
-  const title2 = document.getElementById('b2').value.trim();
-
+function renderResult(book, dist, source, target, t1, t2) {
   document.getElementById('r-title').textContent  = book.title;
   document.getElementById('r-author').textContent = book.author;
   document.getElementById('r-genre').textContent  = book.genre || '一般';
   document.getElementById('r-source').textContent = source;
-  document.getElementById('r-reason').textContent = generateReason(book, target, title1, title2);
+  document.getElementById('r-reason').textContent = generateReason(book, target, t1, t2);
 
   const maxDist = Math.sqrt(AXES.length); // 全軸最大差の理論値
   const pct = Math.max(45, Math.min(98, Math.round((1 - dist / maxDist) * 100)));
