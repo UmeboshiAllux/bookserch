@@ -191,47 +191,6 @@ main { width: 100%; max-width: 640px; }
   margin-top: 0.6rem;
 }
 
-/* google books key */
-.gbkey-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin-top: 0.6rem;
-}
-.gbkey-row input {
-  flex: 1;
-  min-width: 160px;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  font-family: monospace;
-  font-size: 0.74rem;
-  color: var(--ink);
-  padding: 2px 0;
-  outline: none;
-}
-.gbkey-row input:focus { border-bottom-color: var(--blue); }
-.gbkey-row label { font-size: 0.68rem; color: var(--ink-faint); white-space: nowrap; }
-.gbkey-save {
-  font-size: 0.66rem;
-  padding: 3px 10px;
-  border: 1px solid var(--border-s);
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--ink-mid);
-  font-family: 'Noto Sans JP', sans-serif;
-}
-.gbkey-save:hover { background: var(--paper-2); }
-.gbkey-help {
-  font-size: 0.62rem;
-  color: var(--ink-ghost);
-  margin-top: 4px;
-}
-.gbkey-help a { color: var(--blue); }
-.gbkey-ok { font-size: 0.65rem; color: var(--green); }
-
 /* book inputs */
 .books-grid {
   display: grid;
@@ -423,18 +382,6 @@ footer {
     </div>
     <button class="retry-link" id="retry-link" onclick="retryConnection()">→ オンライン接続を再試行</button>
     <div class="error-detail" id="error-detail"></div>
-
-    <div class="gbkey-row">
-      <label for="gbkey-input">Google Books APIキー（任意・推奨）</label>
-      <input type="password" id="gbkey-input" placeholder="未設定でも動作します" autocomplete="off" spellcheck="false">
-      <button class="gbkey-save" onclick="saveGbKey()">保存</button>
-      <span class="gbkey-ok" id="gbkey-ok" style="display:none">✓ 設定済み</span>
-    </div>
-    <div class="gbkey-help">
-      キーなしでも動作しますが、429エラー（レート制限）が出る場合は設定を推奨します。
-      <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">無料キーの取得はこちら</a>
-      （Google Cloud Console → 認証情報 → APIキーを作成 → Books APIを有効化）
-    </div>
   </div>
 
   <div class="tag-selector-card">
@@ -689,8 +636,11 @@ let resolvedTitle2 = '';
 let apiAvailable = null; // null=未検証, true/false
 let userMode = 'auto';   // 'auto' = オンライン優先 / 'offline' = 常にオフライン
 let lastErrorDetail = '';
-let gbApiKey = '';       // Google Books APIキー（任意）
 let selectedTagIds = []; // ユーザーが選択したジャンルタグID（空=全ジャンルランダム）
+
+// Cloudflare Worker プロキシのベースURL
+// （ここをデプロイ後の実際のWorkers URLに差し替える）
+const PROXY_BASE_URL = 'https://book-finder-proxy.YOUR_SUBDOMAIN.workers.dev';
 
 function renderTagChips() {
   const row = document.getElementById('tag-chip-row');
@@ -721,17 +671,6 @@ function clearTags() {
 }
 
 renderTagChips();
-
-function saveGbKey() {
-  const v = document.getElementById('gbkey-input').value.trim();
-  if (!v) return;
-  gbApiKey = v;
-  document.getElementById('gbkey-input').value = '••••••••••••••••';
-  document.getElementById('gbkey-input').disabled = true;
-  document.getElementById('gbkey-ok').style.display = 'inline';
-  // キーを設定したら即座に再接続を試す
-  if (userMode === 'auto') retryConnection();
-}
 
 // ═══════════════════════════════════════════════════════════
 // ユーティリティ
@@ -811,9 +750,8 @@ function titleSimilarity(a, b) {
 // タイトルでGoogle Booksを検索（intitle:優先、ヒットなければ通常検索でも試行）
 async function searchGoogleBooksByTitle(title) {
   async function doSearch(q) {
-    let url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}`
-            + `&maxResults=5&langRestrict=ja&country=JP`;
-    if (gbApiKey) url += `&key=${encodeURIComponent(gbApiKey)}`;
+    const url = `${PROXY_BASE_URL}/books/search?q=${encodeURIComponent(q)}`
+              + `&maxResults=5&langRestrict=ja&country=JP`;
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 7000);
     try {
@@ -1032,10 +970,9 @@ function retryConnection() {
 // ═══════════════════════════════════════════════════════════
 async function fetchGoogleBooks(query, maxResults, isRetry) {
   const startIndex = Math.floor(Math.random() * 60);
-  let url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}`
-          + `&maxResults=${maxResults}&startIndex=${startIndex}&printType=books`
-          + `&langRestrict=ja&country=JP`; // 日本語版・日本で入手可能な本を優先
-  if (gbApiKey) url += `&key=${encodeURIComponent(gbApiKey)}`;
+  const url = `${PROXY_BASE_URL}/books/search?q=${encodeURIComponent(query)}`
+            + `&maxResults=${maxResults}&startIndex=${startIndex}`
+            + `&langRestrict=ja&country=JP`; // 日本語版・日本で入手可能な本を優先
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -1045,12 +982,12 @@ async function fetchGoogleBooks(query, maxResults, isRetry) {
     clearTimeout(timeoutId);
 
     if (res.status === 429) {
-      // レート制限: 1回だけ少し待って再試行（キーなしの場合に多発するため）
+      // プロキシ側のレート制限に到達。1回だけ少し待って再試行
       if (!isRetry) {
         await new Promise(r => setTimeout(r, 1500));
         return fetchGoogleBooks(query, maxResults, true);
       }
-      throw new Error('HTTP 429（レート制限）' + (gbApiKey ? '' : ' — APIキー未設定のため上限に達しやすくなっています'));
+      throw new Error('HTTP 429（一時的な混雑です。しばらくしてから再試行してください）');
     }
     if (!res.ok) throw new Error('HTTP ' + res.status + '（' + query + '）');
 
@@ -1259,7 +1196,7 @@ async function onFind() {
 
     drawRadar(vec1, vec2, pick.book.params);
     setProgress('');
-    renderResult(pick.book, pick.dist, source, target, resolvedTitle1, resolvedTitle2);
+    await renderResult(pick.book, pick.dist, source, target, resolvedTitle1, resolvedTitle2);
 
   } catch (e) {
     console.error(e);
@@ -1334,7 +1271,8 @@ function pickSeededRandom(arr, seed) {
   return arr[Math.max(0, Math.min(arr.length - 1, idx))];
 }
 
-function generateReason(book, target, title1, title2) {
+// 部品化方式（フォールバック用）。Claude呼び出しが使えない場合に使用する。
+function generateReasonFallback(book, target, title1, title2) {
   // どの軸がtargetと最も近いか（上位4軸を候補とし、その中からランダムに2つ選ぶことで
   // 「同じ2軸ばかり言及される」偏りを防ぐ。close軸が常に1位2位固定だと文章は変わっても
   // 内容の使い回し感が出てしまうため）
@@ -1376,21 +1314,74 @@ function generateReason(book, target, title1, title2) {
   const closer = pickSeededRandom(CLOSERS, baseSeed + 4);
   const skeletonIdx = Math.floor(Math.random() * 3);
 
-  return buildSkeleton(
-    skeletonIdx,
-    closerTo, otherBook, axisA, axisB, connector, closer, useFormerLatter
-  );
+  return {
+    text: buildSkeleton(skeletonIdx, closerTo, otherBook, axisA, axisB, connector, closer, useFormerLatter),
+    topAxisKeys,
+  };
+}
+
+// メインの推薦理由生成。まずWorkers経由でClaudeに自然な理由文を依頼し、
+// 失敗・予算上限到達時は自動的に部品化方式にフォールバックする。
+async function generateReason(book, target, title1, title2) {
+  // フォールバック用に軸情報だけ先に計算しておく（Claude成功時も軸ラベルを伝える材料にする）
+  const diffs = AXES.map(ax => ({
+    key: ax.key,
+    name: ax.label,
+    d: Math.abs((book.params[ax.key]||0) - target[ax.key]),
+  })).sort((a, b) => a.d - b.d);
+  const candidatePool = diffs.slice(0, 4);
+  const shuffled = [...candidatePool].sort(() => Math.random() - 0.5);
+  const topAxisName1 = shuffled[0].name;
+  const topAxisName2 = shuffled[1].name;
+
+  // userMode === 'offline' なら最初からネットワークに触れない
+  if (userMode === 'offline') {
+    return generateReasonFallback(book, target, title1, title2).text;
+  }
+
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`${PROXY_BASE_URL}/reason`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        title1, title2,
+        bookTitle: book.title,
+        bookAuthor: book.author,
+        axisA: topAxisName1,
+        axisB: topAxisName2,
+      }),
+    });
+    clearTimeout(t);
+
+    if (!res.ok) {
+      return generateReasonFallback(book, target, title1, title2).text;
+    }
+
+    const data = await res.json();
+    if (data.fallback || !data.reason) {
+      // 予算上限・エラー等。静かに部品化方式へ
+      return generateReasonFallback(book, target, title1, title2).text;
+    }
+    return data.reason;
+
+  } catch (e) {
+    // ネットワークエラー・タイムアウト等も静かにフォールバック
+    return generateReasonFallback(book, target, title1, title2).text;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
 // 結果レンダリング
 // ═══════════════════════════════════════════════════════════
-function renderResult(book, dist, source, target, t1, t2) {
+async function renderResult(book, dist, source, target, t1, t2) {
   document.getElementById('r-title').textContent  = book.title;
   document.getElementById('r-author').textContent = book.author;
   document.getElementById('r-genre').textContent  = book.genre || '一般';
   document.getElementById('r-source').textContent = source;
-  document.getElementById('r-reason').textContent = generateReason(book, target, t1, t2);
+  document.getElementById('r-reason').textContent = '推薦理由を考えています…';
 
   const maxDist = Math.sqrt(AXES.length); // 全軸最大差の理論値
   const pct = Math.max(45, Math.min(98, Math.round((1 - dist / maxDist) * 100)));
@@ -1401,6 +1392,10 @@ function renderResult(book, dist, source, target, t1, t2) {
   card.classList.remove('visible');
   void card.offsetWidth;
   card.classList.add('visible');
+
+  // 理由文は非同期で取得し、できた時点で差し込む（カード自体は先に表示してUXを保つ）
+  const reasonText = await generateReason(book, target, t1, t2);
+  document.getElementById('r-reason').textContent = reasonText;
 }
 
 function onRetry() { onFind(); }
@@ -1420,22 +1415,18 @@ async function checkApiOnLoad() {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 6000);
-    let probeUrl = 'https://www.googleapis.com/books/v1/volumes?q=test&maxResults=1';
-    if (gbApiKey) probeUrl += `&key=${encodeURIComponent(gbApiKey)}`;
+    const probeUrl = `${PROXY_BASE_URL}/books/search?q=test&maxResults=1`;
     const res = await fetch(probeUrl, { signal: controller.signal });
     clearTimeout(t);
     if (res.ok) {
       updateSourceBadge(true);
     } else if (res.status === 429) {
-      updateSourceBadge(false, 'HTTP 429（レート制限）' + (gbApiKey ? '' : ' — APIキーの設定を推奨します'));
+      updateSourceBadge(false, 'HTTP 429（一時的な混雑です。しばらくしてから再試行してください）');
     } else {
       updateSourceBadge(false, 'HTTP ' + res.status);
     }
   } catch (e) {
-    let detail = e.name === 'AbortError' ? 'タイムアウト' : (e.message || 'ネットワークエラー');
-    if (location.protocol === 'file:') {
-      detail += '（file://で開いている場合、ブラウザによってはこの起動方法だとブロックされることがあります。ローカルサーバー経由をお試しください）';
-    }
+    const detail = e.name === 'AbortError' ? 'タイムアウト' : (e.message || 'ネットワークエラー');
     updateSourceBadge(false, detail);
   }
 }
