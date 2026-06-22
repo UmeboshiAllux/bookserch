@@ -223,6 +223,13 @@ main { width: 100%; max-width: 640px; }
   outline: none;
 }
 .book-input-card input::placeholder { color: var(--ink-ghost); }
+.book-note-input {
+  margin-top: 0.4rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.35rem;
+  font-size: 0.72rem !important;
+  color: var(--ink-faint) !important;
+}
 
 /* radar */
 .radar-card {
@@ -419,11 +426,13 @@ footer {
   <div class="books-grid">
     <div class="book-input-card">
       <div class="num">book 1</div>
-      <input type="text" id="b1" placeholder="例: ハーモニー">
+      <input type="text" id="b1" placeholder="例: 砂漠">
+      <input type="text" id="b1note" class="book-note-input" placeholder="補足（著者名・出版社・任意）">
     </div>
     <div class="book-input-card">
       <div class="num">book 2</div>
-      <input type="text" id="b2" placeholder="例: ツインスターサイクロンランナウェイ">
+      <input type="text" id="b2" placeholder="例: 博士の愛した数式">
+      <input type="text" id="b2note" class="book-note-input" placeholder="補足（著者名・出版社・任意）">
     </div>
   </div>
 
@@ -478,7 +487,8 @@ footer {
 
 <footer>
   本データは Google Books API（取得できない場合は内蔵データベース）を使用しています。<br>
-  完全無料・サーバー不要・APIキー不要の静的サイトです。
+  完全無料・サーバー不要・APIキー不要の静的サイトです。<br>
+  推薦結果（入力タイトルと推薦された本のペア）は、サービス品質の改善を目的として記録しています。
 </footer>
 
 <script>
@@ -1183,7 +1193,13 @@ async function onFind() {
 
   const title1 = document.getElementById('b1').value.trim();
   const title2 = document.getElementById('b2').value.trim();
+  const note1  = document.getElementById('b1note').value.trim();
+  const note2  = document.getElementById('b2note').value.trim();
   if (!title1 || !title2) { showError('2冊のタイトルを入力してください'); return; }
+
+  // 備考欄がある場合は検索クエリに付加（著者名等で絞り込む）
+  const query1 = note1 ? `${title1} ${note1}` : title1;
+  const query2 = note2 ? `${title2} ${note2}` : title2;
 
   document.getElementById('find-btn').disabled = true;
   document.getElementById('result-card').classList.remove('visible');
@@ -1192,8 +1208,8 @@ async function onFind() {
     // ── 入力2冊のパラメータ取得（実在検証つき） ──
     setProgress('2冊の本を確認中…');
     const [entry1, entry2] = await Promise.all([
-      resolveBookEntry(title1),
-      resolveBookEntry(title2),
+      resolveBookEntry(query1),
+      resolveBookEntry(query2),
     ]);
     vec1 = entry1.params;
     vec2 = entry2.params;
