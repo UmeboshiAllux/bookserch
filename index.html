@@ -677,8 +677,6 @@ let rejected = [];
 let lastRec  = null;
 let vec1 = PRESETS['ハーモニー'];
 let vec2 = PRESETS['ツインスターサイクロンランナウェイ'];
-let resolvedTitle1 = ''; // 表示用のクリーンなタイトル（著者名等を含まない）
-let resolvedTitle2 = '';
 let apiAvailable = null; // null=未検証, true/false
 let userMode = 'auto';   // 'auto' = オンライン優先 / 'offline' = 常にオフライン
 let lastErrorDetail = '';
@@ -1255,10 +1253,6 @@ async function onFind() {
     ]);
     vec1 = entry1.params;
     vec2 = entry2.params;
-    // 表示用には実在検証で得られたクリーンなタイトルを使う
-    // （「ハーモニー 伊藤計劃」のような入力でも「ハーモニー」だけになる）
-    resolvedTitle1 = entry1.resolvedTitle || title1;
-    resolvedTitle2 = entry2.resolvedTitle || title2;
     drawRadar(vec1, vec2, null);
 
     // ── 候補プール取得 ──
@@ -1302,7 +1296,7 @@ async function onFind() {
 
     drawRadar(vec1, vec2, pick.book.params);
     setProgress('');
-    renderResult(pick.book, pick.dist, source, target, resolvedTitle1, resolvedTitle2);
+    renderResult(pick.book, pick.dist, source, target);
 
   } catch (e) {
     console.error(e);
@@ -1314,175 +1308,9 @@ async function onFind() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// 推薦理由生成（部品化方式 — APIを使わず組み合わせで多様性を確保）
-//
-// 設計: 文を「骨格」「軸の言い回し」「接続表現」「結びの一文」に分解。
-// それぞれ独立した乱数で選ぶことで、3骨格 × 6接続 × 8結び × 軸の言い回し
-// バリエーション ≒ 数百通り以上の組み合わせが生まれ、同じ文が連続しにくい。
-// ═══════════════════════════════════════════════════════════
-
-// 軸ラベルの言い換えバリエーション（同じ軸でも毎回違う言葉で表現する）
-const AXIS_PHRASES = {
-  sf:       ['SFや幻想の手触り', '現実離れした世界観の強さ', '幻想性の濃さ'],
-  thought:  ['思想の密度', '物事を深く問う姿勢', '哲学的な奥行き'],
-  emotion:  ['感情の振れ幅', '心の揺さぶられ方', '感情表現の強さ'],
-  darkness: ['物語の重さ', '世界観の暗さ', '結末の手触りの重さ'],
-  world:    ['世界の作り込み', '設定の緻密さ', '世界観の広がり'],
-  prose:    ['文章そのものの味わい', '文体の個性', '言葉選びの密度'],
-  pace:     ['物語の疾走感', 'テンポの良さ', '読み進める勢い'],
-  relation: ['登場人物同士の結びつき', '関係性の描かれ方', '絆の濃さ'],
-};
-
-// 接続表現（2つの近さをどう繋ぐか）
-const CONNECTORS = [
-  'と深く共鳴しながら、',
-  'という点で重なり合い、',
-  'の感触を静かに受け継ぎつつ、',
-  'を思わせる一方で、',
-  'と響き合う部分を持ちながら、',
-  'の感覚を引き継ぎつつ、',
-];
-
-// 結びの一文（どんな読書体験になるか）
-const CLOSERS = [
-  '新しい視点を加えてくれるはずです。',
-  '静かながらも記憶に残る読書体験になるでしょう。',
-  '思いがけない発見が待っているはずです。',
-  '読み終えたあとに2冊への見方も変わるかもしれません。',
-  'これまでにない角度から物語を味わえるはずです。',
-  '次に何を読むか、また新しい問いをくれる一冊です。',
-  '静かに視界が広がるような読書になるはずです。',
-];
-
-// 文の骨格（3パターン。どの骨格を使うかも乱数で決める）
-function buildSkeleton(skeletonIdx, closerTo, otherBook, axisA, axisB, connector, closer, useFormerLatter) {
-  // 「前者」「後者」表現の場合は鉤括弧をつけない（不自然になるため）
-  const closerLabel = useFormerLatter ? closerTo : `「${closerTo}」`;
-  const otherLabel   = useFormerLatter ? otherBook : `「${otherBook}」`;
-
-  switch (skeletonIdx) {
-    case 0:
-      return `${closerLabel}とは${axisA}${connector}${otherLabel}が持つ${axisB}も静かに重ねています。${closer}`;
-    case 1:
-      return `${axisA}と${axisB}という軸において、あなたが読んだ2冊のちょうど中間に位置する作品です。${closerLabel}${connector}${closer}`;
-    default:
-      return `2冊のパラメータが交差する場所から見つけ出した一冊です。${axisA}は${closerLabel}を、${axisB}は${otherLabel}を思わせます。${closer}`;
-  }
-}
-
-// シンプルな疑似乱数（タイトル＋現在時刻ベースのシードで毎回変化させる）
-function pickSeededRandom(arr, seed) {
-  const x = Math.sin(seed) * 10000;
-  const idx = Math.floor((x - Math.floor(x)) * arr.length);
-  return arr[Math.max(0, Math.min(arr.length - 1, idx))];
-}
-
-// 部品化方式（フォールバック用）。Claude呼び出しが使えない場合に使用する。
-function generateReasonFallback(book, target, title1, title2) {
-  // どの軸がtargetと最も近いか（上位4軸を候補とし、その中からランダムに2つ選ぶことで
-  // 「同じ2軸ばかり言及される」偏りを防ぐ。close軸が常に1位2位固定だと文章は変わっても
-  // 内容の使い回し感が出てしまうため）
-  const diffs = AXES.map(ax => ({
-    key: ax.key,
-    name: ax.label,
-    d: Math.abs((book.params[ax.key]||0) - target[ax.key]),
-  })).sort((a, b) => a.d - b.d);
-
-  const candidatePool = diffs.slice(0, 4); // 上位4軸を候補に
-  const shuffled = [...candidatePool].sort(() => Math.random() - 0.5);
-  const topAxisKeys = [shuffled[0].key, shuffled[1].key];
-
-  // book1とbook2どちらに近いか
-  const distTo1 = euclidean(book.params, vec1);
-  const distTo2 = euclidean(book.params, vec2);
-  const closerIsFirst = distTo1 < distTo2;
-
-  // 表示形式をランダムに選ぶ:
-  //  - 「書名」のみ（クリーンなタイトル）
-  //  - 「前者」「後者」（入力欄の表記ゆれや冗長さを避けるための代替表現）
-  // 文章ごとにどちらを使うか変えることで、表現の幅も広がる
-  const useFormerLatter = Math.random() < 0.4; // 4割の確率で前者/後者表現を使う
-  let closerTo, otherBook;
-  if (useFormerLatter) {
-    closerTo  = closerIsFirst ? '前者' : '後者';
-    otherBook = closerIsFirst ? '後者' : '前者';
-  } else {
-    closerTo  = closerIsFirst ? title1 : title2;
-    otherBook = closerIsFirst ? title2 : title1;
-  }
-
-  // 毎回異なる組み合わせになるよう、呼び出しごとに変わるシードを使う
-  const baseSeed = Date.now() % 100000 + Math.random() * 1000;
-
-  const axisA = pickSeededRandom(AXIS_PHRASES[topAxisKeys[0]] || ['この物語の質感'], baseSeed + 1);
-  const axisB = pickSeededRandom(AXIS_PHRASES[topAxisKeys[1]] || ['もう一つの側面'], baseSeed + 2);
-  const connector = pickSeededRandom(CONNECTORS, baseSeed + 3);
-  const closer = pickSeededRandom(CLOSERS, baseSeed + 4);
-  const skeletonIdx = Math.floor(Math.random() * 3);
-
-  return {
-    text: buildSkeleton(skeletonIdx, closerTo, otherBook, axisA, axisB, connector, closer, useFormerLatter),
-    topAxisKeys,
-  };
-}
-
-// メインの推薦理由生成。まずWorkers経由でClaudeに自然な理由文を依頼し、
-// 失敗・予算上限到達時は自動的に部品化方式にフォールバックする。
-async function generateReason(book, target, title1, title2) {
-  // フォールバック用に軸情報だけ先に計算しておく（Claude成功時も軸ラベルを伝える材料にする）
-  const diffs = AXES.map(ax => ({
-    key: ax.key,
-    name: ax.label,
-    d: Math.abs((book.params[ax.key]||0) - target[ax.key]),
-  })).sort((a, b) => a.d - b.d);
-  const candidatePool = diffs.slice(0, 4);
-  const shuffled = [...candidatePool].sort(() => Math.random() - 0.5);
-  const topAxisName1 = shuffled[0].name;
-  const topAxisName2 = shuffled[1].name;
-
-  // userMode === 'offline' なら最初からネットワークに触れない
-  if (userMode === 'offline') {
-    return generateReasonFallback(book, target, title1, title2).text;
-  }
-
-  try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(`${PROXY_BASE_URL}/reason`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        title1, title2,
-        bookTitle: book.title,
-        bookAuthor: book.author,
-        axisA: topAxisName1,
-        axisB: topAxisName2,
-      }),
-    });
-    clearTimeout(t);
-
-    if (!res.ok) {
-      return generateReasonFallback(book, target, title1, title2).text;
-    }
-
-    const data = await res.json();
-    if (data.fallback || !data.reason) {
-      // 予算上限・エラー等。静かに部品化方式へ
-      return generateReasonFallback(book, target, title1, title2).text;
-    }
-    return data.reason;
-
-  } catch (e) {
-    // ネットワークエラー・タイムアウト等も静かにフォールバック
-    return generateReasonFallback(book, target, title1, title2).text;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
 // 結果レンダリング
 // ═══════════════════════════════════════════════════════════
-async function renderResult(book, dist, source, target, t1, t2) {
+function renderResult(book, dist, source, target) {
   document.getElementById('r-title').textContent  = book.title;
   document.getElementById('r-author').textContent = book.author;
   document.getElementById('r-genre').textContent  = book.genre || '一般';
