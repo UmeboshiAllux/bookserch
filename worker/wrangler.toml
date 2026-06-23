@@ -1,0 +1,14 @@
+name = "book-finder-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# KV namespace の binding
+# 実際の id は `wrangler kv namespace create RATE_LIMIT_KV` で作成後、
+# 表示される id をここに貼り付けてください
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "YOUR_KV_NAMESPACE_ID_HERE"
+
+# シークレット（APIキー）は wrangler.toml に書かず、以下のコマンドで設定する:
+#   wrangler secret put GOOGLE_BOOKS_API_KEY
+#   wrangler secret put ANTHROPIC_API_KEY

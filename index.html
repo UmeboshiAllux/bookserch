@@ -318,11 +318,11 @@ svg#radar { display: block; margin: 0 auto; overflow: visible; }
   display: flex;
   gap: 1rem;
   align-items: flex-start;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 .result-thumbnail {
-  width: 64px;
-  height: 96px;
+  width: 72px;
+  height: 108px;
   object-fit: cover;
   border-radius: 3px;
   border: 1px solid var(--border-s);
@@ -332,11 +332,11 @@ svg#radar { display: block; margin: 0 auto; overflow: visible; }
 .result-top-text { flex: 1; min-width: 0; }
 .result-title {
   font-family: 'Noto Serif JP', serif;
-  font-size: 1.35rem; font-weight: 400; letter-spacing: 0.03em;
+  font-size: 1.25rem; font-weight: 400; letter-spacing: 0.03em;
   line-height: 1.45; margin-bottom: 0.25rem;
 }
-.result-author { font-size: 0.78rem; color: var(--ink-mid); margin-bottom: 0.3rem; }
-.result-meta-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.result-author { font-size: 0.78rem; color: var(--ink-mid); margin-bottom: 0.5rem; }
+.result-meta-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 0.5rem; }
 .result-genre {
   display: inline-block; font-size: 0.6rem; letter-spacing: 0.06em;
   padding: 2px 8px; border-radius: 3px; background: var(--blue-bg); color: var(--blue);
@@ -345,15 +345,40 @@ svg#radar { display: block; margin: 0 auto; overflow: visible; }
   display: inline-block; font-size: 0.6rem; letter-spacing: 0.06em;
   padding: 2px 8px; border-radius: 3px; background: var(--paper-2); color: var(--ink-faint);
 }
-.result-reason {
-  font-size: 0.82rem; line-height: 1.9; color: var(--ink-mid); font-weight: 300;
-  border-left: 2px solid var(--border-s); padding-left: 1rem; margin-bottom: 1rem;
+.result-info-chips {
+  display: flex; gap: 6px; flex-wrap: wrap;
 }
+.info-chip {
+  font-size: 0.62rem; color: var(--ink-faint);
+  display: inline-flex; align-items: center; gap: 3px;
+}
+
+/* パラメータ横棒グラフ */
+.param-section {
+  margin-bottom: 1.25rem;
+}
+.param-section-label {
+  font-size: 0.62rem; letter-spacing: 0.1em; color: var(--ink-faint);
+  text-transform: uppercase; margin-bottom: 0.6rem;
+}
+.param-row {
+  display: grid;
+  grid-template-columns: 5rem 1fr 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.param-label { font-size: 0.65rem; color: var(--ink-mid); text-align: right; }
+.param-track { height: 5px; background: var(--paper-2); border-radius: 3px; overflow: hidden; }
+.param-fill { height: 100%; border-radius: 3px; background: var(--blue); transition: width 0.5s ease; }
+.param-val { font-size: 0.62rem; color: var(--ink-ghost); text-align: right; }
+
+/* 一致度バー */
 .match-row {
   display: flex; justify-content: space-between; align-items: center;
   font-size: 0.62rem; color: var(--ink-faint); margin-bottom: 0.3rem;
 }
-.match-bar { height: 2px; background: var(--paper-2); border-radius: 2px; margin-bottom: 1rem; overflow: hidden; }
+.match-bar { height: 2px; background: var(--paper-2); border-radius: 2px; margin-bottom: 1.25rem; overflow: hidden; }
 .match-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.6s ease; }
 .lock-note {
   font-size: 0.62rem; color: var(--ink-ghost);
@@ -465,11 +490,18 @@ footer {
           <span class="result-genre"  id="r-genre"></span>
           <span class="result-source" id="r-source"></span>
         </div>
+        <div class="result-info-chips" id="r-info-chips"></div>
       </div>
     </div>
+
     <div class="match-row"><span>パラメータ一致度</span><span id="r-match-pct"></span></div>
     <div class="match-bar"><div class="match-fill" id="r-match-fill" style="width:0%"></div></div>
-    <div class="result-reason" id="r-reason"></div>
+
+    <div class="param-section">
+      <div class="param-section-label">パラメータ詳細</div>
+      <div id="r-param-bars"></div>
+    </div>
+
     <div class="lock-note">
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -477,7 +509,8 @@ footer {
       選考アルゴリズムは非公開
     </div>
     <div class="result-actions">
-      <a class="action-btn amazon" id="r-amazon-link" href="#" target="_blank" rel="noopener" style="display:none">Amazonで見る ↗</a>
+      <a class="action-btn amazon" id="r-amazon-link" href="#" target="_blank" rel="noopener">Amazonで見る ↗</a>
+      <a class="action-btn" id="r-google-link" href="#" target="_blank" rel="noopener" style="display:none">Google Booksで見る ↗</a>
       <button class="action-btn" onclick="onRetry()">別の一冊 →</button>
       <button class="action-btn danger" onclick="onAlreadyRead()">読んだことある — やり直し</button>
     </div>
@@ -866,13 +899,17 @@ function paramsFromCategories(title, categories) {
 }
 
 // Google Booksのindustry Identifiers(ISBN)からAmazonリンクを組み立てる
-function buildAmazonLink(industryIdentifiers) {
-  if (!industryIdentifiers || industryIdentifiers.length === 0) return null;
-  const isbn13 = industryIdentifiers.find(id => id.type === 'ISBN_13');
-  const isbn10 = industryIdentifiers.find(id => id.type === 'ISBN_10');
-  const isbn = (isbn13 || isbn10) ? (isbn13 || isbn10).identifier : null;
-  if (!isbn) return null;
-  return `https://www.amazon.co.jp/dp/${isbn}`;
+// ISBNがない場合はタイトル+著者のAmazon検索URLにフォールバック
+function buildAmazonLink(industryIdentifiers, title, authors) {
+  if (industryIdentifiers && industryIdentifiers.length > 0) {
+    const isbn13 = industryIdentifiers.find(id => id.type === 'ISBN_13');
+    const isbn10 = industryIdentifiers.find(id => id.type === 'ISBN_10');
+    const isbn = (isbn13 || isbn10) ? (isbn13 || isbn10).identifier : null;
+    if (isbn) return `https://www.amazon.co.jp/dp/${isbn}`;
+  }
+  // ISBNがない場合はタイトル+著者名で検索（必ず表示できる）
+  const q = [title, ...(Array.isArray(authors) ? authors.slice(0,1) : [authors])].filter(Boolean).join(' ');
+  return `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}`;
 }
 
 // 表紙画像URLを取得（httpはhttpsに強制。Google Booksがhttpを返すことがあるため）
@@ -1061,7 +1098,10 @@ async function fetchGoogleBooks(query, maxResults, isRetry) {
           genre: (info.categories && info.categories[0]) ? info.categories[0].split('/').pop().trim() : '一般',
           language: info.language || 'ja',
           thumbnail: getThumbnailUrl(info.imageLinks),
-          amazonLink: buildAmazonLink(info.industryIdentifiers),
+          amazonLink: buildAmazonLink(info.industryIdentifiers, info.title, info.authors),
+          googleBooksLink: info.infoLink || null,
+          pageCount: info.pageCount || null,
+          publishedDate: info.publishedDate ? info.publishedDate.slice(0, 4) : null,
         };
       })
       .filter(Boolean);
@@ -1262,7 +1302,7 @@ async function onFind() {
 
     drawRadar(vec1, vec2, pick.book.params);
     setProgress('');
-    await renderResult(pick.book, pick.dist, source, target, resolvedTitle1, resolvedTitle2);
+    renderResult(pick.book, pick.dist, source, target, resolvedTitle1, resolvedTitle2);
 
   } catch (e) {
     console.error(e);
@@ -1447,42 +1487,63 @@ async function renderResult(book, dist, source, target, t1, t2) {
   document.getElementById('r-author').textContent = book.author;
   document.getElementById('r-genre').textContent  = book.genre || '一般';
   document.getElementById('r-source').textContent = source;
-  document.getElementById('r-reason').textContent = '推薦理由を考えています…';
 
-  // 表紙画像（取得できなかった場合は非表示のまま）
+  // 出版年・ページ数チップ
+  const chips = document.getElementById('r-info-chips');
+  chips.innerHTML = '';
+  if (book.publishedDate) {
+    chips.innerHTML += `<span class="info-chip">📅 ${book.publishedDate}年</span>`;
+  }
+  if (book.pageCount) {
+    chips.innerHTML += `<span class="info-chip">📄 ${book.pageCount}ページ</span>`;
+  }
+
+  // 表紙画像
   const thumbEl = document.getElementById('r-thumbnail');
   if (book.thumbnail) {
     thumbEl.src = book.thumbnail;
     thumbEl.alt = book.title + ' の表紙';
     thumbEl.style.display = 'block';
-    thumbEl.onerror = () => { thumbEl.style.display = 'none'; }; // 画像読み込み失敗時は静かに隠す
+    thumbEl.onerror = () => { thumbEl.style.display = 'none'; };
   } else {
     thumbEl.style.display = 'none';
     thumbEl.removeAttribute('src');
   }
 
-  // Amazonリンク（ISBNが取得できた場合のみ表示）
+  // Amazonリンク（常に表示）
   const amazonEl = document.getElementById('r-amazon-link');
-  if (book.amazonLink) {
-    amazonEl.href = book.amazonLink;
-    amazonEl.style.display = 'inline-block';
+  amazonEl.href = book.amazonLink || `https://www.amazon.co.jp/s?k=${encodeURIComponent(book.title)}`;
+
+  // Google Booksリンク
+  const googleEl = document.getElementById('r-google-link');
+  if (book.googleBooksLink) {
+    googleEl.href = book.googleBooksLink;
+    googleEl.style.display = 'inline-block';
   } else {
-    amazonEl.style.display = 'none';
+    googleEl.style.display = 'none';
   }
 
-  const maxDist = Math.sqrt(AXES.length); // 全軸最大差の理論値
+  // 一致度バー
+  const maxDist = Math.sqrt(AXES.length);
   const pct = Math.max(45, Math.min(98, Math.round((1 - dist / maxDist) * 100)));
   document.getElementById('r-match-pct').textContent = pct + '%';
   document.getElementById('r-match-fill').style.width = pct + '%';
+
+  // パラメータ横棒グラフ
+  const paramBars = document.getElementById('r-param-bars');
+  paramBars.innerHTML = AXES.map(ax => {
+    const val = Math.round((book.params[ax.key] || 0) * 100);
+    return `<div class="param-row">
+      <div class="param-label">${ax.label}</div>
+      <div class="param-track"><div class="param-fill" style="width:${val}%"></div></div>
+      <div class="param-val">${val}</div>
+    </div>`;
+  }).join('');
 
   const card = document.getElementById('result-card');
   card.classList.remove('visible');
   void card.offsetWidth;
   card.classList.add('visible');
-
-  // 理由文は非同期で取得し、できた時点で差し込む（カード自体は先に表示してUXを保つ）
-  const reasonText = await generateReason(book, target, t1, t2);
-  document.getElementById('r-reason').textContent = reasonText;
 }
 
 function onRetry() { onFind(); }
