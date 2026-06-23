@@ -1106,43 +1106,68 @@ function filterFallbackByTags(books) {
 // フィクション系タグ（物語であることが期待されるタグ）
 const FICTION_LEANING_TAGS = ['fiction', 'sf', 'fantasy', 'mystery', 'horror', 'romance', 'drama', 'jlit', 'dystopia'];
 
-// タイトル自体に現れる「研究・参考文献」系の強いシグナル
-// （日本の学術参考書・文献要覧の類はGoogle Books上でcategoriesが空のことが多く、
-//  カテゴリだけのチェックではすり抜けてしまうため、タイトルパターンでも検出する）
+// ═══════════════════════════════════════════════════════════
+// フィクション判定（ホワイトリスト優先方式）
+//
+// 旧方式: ブラックリストに引っかかるものを除外（抜け穴が多い）
+// 新方式: 「フィクションである」と判定できるものだけ通す
+//         どちらとも判断できない場合は除外（母数より精度を優先）
+// ═══════════════════════════════════════════════════════════
+
+// Google BooksカテゴリでFictionと判定できるキーワード
+const FICTION_CATEGORY_SIGNALS = [
+  'fiction', 'novel', 'short stories', 'fantasy', 'science fiction',
+  'mystery', 'thriller', 'horror', 'romance', 'literary',
+  'juvenile fiction', 'young adult fiction',
+  '小説', '文学', 'フィクション', '物語', 'ファンタジー',
+];
+
+// カテゴリなし時にタイトルからフィクションと推定できるパターン
+const FICTION_TITLE_SIGNALS = [
+  /小説$/, /の物語$/, /物語$/, /ものがたり$/,
+];
+
+// 明確なノンフィクション除外パターン（タイトルベース）
 const NONFICTION_TITLE_PATTERNS = [
   /研究文献/, /文献要覧/, /要覧/, /総覧/, /便覧/, /年表/, /目録/,
   /事典/, /辞典/, /論集/, /研究$/, /論$/, /解説$/, /入門$/,
-  /講座/, /概論/, /白書/, /統計/, /\d{4}\s*[-〜~ー]\s*\d{4}/, // 西暦の範囲(例: 2000-2004)
+  /講座/, /概論/, /白書/, /統計/, /\d{4}\s*[-〜~ー]\s*\d{4}/,
   /全集$/, /全集 /, /選集$/, /叢書/, /文庫全集/, /蔵書/, /所蔵/, /収載/, /収録集/,
   /図書館蔵/, /図書館所蔵/, /アーカイブ/, /資料集/, /資料館/,
+  /文学史/, /文学論/, /文学研究/, /文學史/, /文學論/, /史講話/, /史概説/,
+  /鑑賞/, /読本$/, /作法$/, /批評/, /評論/, /評伝/,
 ];
 
-// Google Booksのcategoriesに現れる典型的なノンフィクション分類のキーワード
-const NONFICTION_SIGNAL_KEYWORDS = [
-  'self-help', 'business', 'cooking', 'travel', 'reference', 'education',
-  'study aids', 'computers', 'health & fitness', 'language arts', 'medical',
-  'law', 'technology', 'true crime', 'juvenile nonfiction', 'literary criticism',
-  'social science', 'biography', 'autobiography',
-  '自己啓発', 'ビジネス', '実用書',
-];
-
-// タイトル・categoriesからフィクションかどうかを推定（フィクション系タグ選択時のみ使用）
 function looksLikeFiction(title, categories) {
-  // タイトル自体に研究・参考文献的な強いシグナルがあれば、カテゴリの有無に関わらず除外
+  // Step1: タイトルに明確なノンフィクションシグナル → 即除外
   if (NONFICTION_TITLE_PATTERNS.some(re => re.test(title || ''))) return false;
 
-  if (!categories || categories.length === 0) return true; // ここまで来てカテゴリ情報なしなら許容（母数確保のため）
-  const catText = categories.join(' ').toLowerCase();
-  if (catText.includes('fiction')) return true; // "Fiction"系カテゴリが明示されていれば確実
-  const hasNonfictionSignal = NONFICTION_SIGNAL_KEYWORDS.some(kw => catText.includes(kw));
-  return !hasNonfictionSignal; // ノンフィクションの強いシグナルがなければ許容
+  // Step2: カテゴリにFictionシグナルがある → 確実にフィクション
+  if (categories && categories.length > 0) {
+    const catText = categories.join(' ').toLowerCase();
+    if (FICTION_CATEGORY_SIGNALS.some(kw => catText.includes(kw))) return true;
+    // カテゴリがあるのにFictionシグナルがない → 疑わしいので除外
+    return false;
+  }
+
+  // Step3: カテゴリ情報なし → タイトルで推定
+  // タイトルにフィクションシグナルがあれば通す
+  if (FICTION_TITLE_SIGNALS.some(re => re.test(title || ''))) return true;
+
+  // Step4: どちらとも判断できない場合
+  // タイトルが短い（〜20文字）かつ日本語を含む → 小説の可能性を許容
+  // （「砂漠」「ハーモニー」のような純粋なタイトルはカテゴリがない場合が多い）
+  const hasJapanese = /[\u3040-\u9FFF]/.test(title || '');
+  const isShortTitle = (title || '').length <= 20;
+  return hasJapanese && isShortTitle;
 }
 
 function filterByFictionIntent(books) {
   const hasFictionTag = selectedTagIds.some(id => FICTION_LEANING_TAGS.includes(id));
-  if (!hasFictionTag) return books; // フィクション系タグが1つも選ばれていなければ素通し
+  if (!hasFictionTag) return books;
   const filtered = books.filter(b => looksLikeFiction(b.title, b.categories));
-  return filtered.length >= 5 ? filtered : books; // 絞りすぎたら元に戻す
+  // 絞りすぎた場合は元に戻す（ただし旧方式より厳格にするため閾値を下げる）
+  return filtered.length >= 3 ? filtered : books;
 }
 
 // 候補プール取得（API優先、失敗時はフォールバック）
