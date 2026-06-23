@@ -353,26 +353,6 @@ svg#radar { display: block; margin: 0 auto; overflow: visible; }
   display: inline-flex; align-items: center; gap: 3px;
 }
 
-/* パラメータ横棒グラフ */
-.param-section {
-  margin-bottom: 1.25rem;
-}
-.param-section-label {
-  font-size: 0.62rem; letter-spacing: 0.1em; color: var(--ink-faint);
-  text-transform: uppercase; margin-bottom: 0.6rem;
-}
-.param-row {
-  display: grid;
-  grid-template-columns: 5rem 1fr 2.5rem;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
-}
-.param-label { font-size: 0.65rem; color: var(--ink-mid); text-align: right; }
-.param-track { height: 5px; background: var(--paper-2); border-radius: 3px; overflow: hidden; }
-.param-fill { height: 100%; border-radius: 3px; background: var(--blue); transition: width 0.5s ease; }
-.param-val { font-size: 0.62rem; color: var(--ink-ghost); text-align: right; }
-
 /* 一致度バー */
 .match-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -496,11 +476,6 @@ footer {
 
     <div class="match-row"><span>パラメータ一致度</span><span id="r-match-pct"></span></div>
     <div class="match-bar"><div class="match-fill" id="r-match-fill" style="width:0%"></div></div>
-
-    <div class="param-section">
-      <div class="param-section-label">パラメータ詳細</div>
-      <div id="r-param-bars"></div>
-    </div>
 
     <div class="lock-note">
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -1528,17 +1503,6 @@ async function renderResult(book, dist, source, target, t1, t2) {
   const pct = Math.max(45, Math.min(98, Math.round((1 - dist / maxDist) * 100)));
   document.getElementById('r-match-pct').textContent = pct + '%';
   document.getElementById('r-match-fill').style.width = pct + '%';
-
-  // パラメータ横棒グラフ
-  const paramBars = document.getElementById('r-param-bars');
-  paramBars.innerHTML = AXES.map(ax => {
-    const val = Math.round((book.params[ax.key] || 0) * 100);
-    return `<div class="param-row">
-      <div class="param-label">${ax.label}</div>
-      <div class="param-track"><div class="param-fill" style="width:${val}%"></div></div>
-      <div class="param-val">${val}</div>
-    </div>`;
-  }).join('');
 
   const card = document.getElementById('result-card');
   card.classList.remove('visible');
