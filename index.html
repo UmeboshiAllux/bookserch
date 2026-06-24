@@ -679,7 +679,6 @@ let vec1 = PRESETS['ハーモニー'];
 let vec2 = PRESETS['ツインスターサイクロンランナウェイ'];
 let apiAvailable = null; // null=未検証, true/false
 let userMode = 'auto';   // 'auto' = オンライン優先 / 'offline' = 常にオフライン
-let lastErrorDetail = '';
 let selectedTagIds = []; // ユーザーが選択したジャンルタグID（空=全ジャンルランダム）
 
 // Cloudflare Worker プロキシのベースURL
@@ -815,9 +814,18 @@ async function searchGoogleBooksByTitle(title) {
     }
   }
 
-  let results = await doSearch(`intitle:${title}`);
-  if (results.length === 0) results = await doSearch(title); // intitle:が厳しすぎる場合の保険
-  return results;
+  // intitle:と通常検索を並列で飛ばし、重複を除いてまとめる（直列より高速）
+  const [r1, r2] = await Promise.all([
+    doSearch(`intitle:${title}`),
+    doSearch(title),
+  ]);
+  const seen = new Set();
+  return [...r1, ...r2].filter(b => {
+    const k = b.title.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 // 入力タイトル1件を解決する: プリセット → 実在検証 → 類似本 → 最終手段としてハッシュ
@@ -997,7 +1005,6 @@ function updateSourceBadge(state, detail) {
     text.textContent = '内蔵データベースで動作中（オフラインモード）';
     retryLink.style.display = userMode === 'auto' ? 'inline' : 'none';
     if (detail) {
-      lastErrorDetail = detail;
       errDetail.textContent = '理由: ' + detail;
       errDetail.style.display = 'block';
     }
@@ -1064,17 +1071,19 @@ async function fetchGoogleBooks(query, maxResults, isRetry) {
       .map(item => {
         const info = item.volumeInfo || {};
         if (!info.title || !info.authors) return null;
+        const categories = info.categories || [];
         return {
           title: info.title,
           author: info.authors.join(', '),
-          categories: info.categories || [],
-          genre: (info.categories && info.categories[0]) ? info.categories[0].split('/').pop().trim() : '一般',
+          categories,
+          genre: categories[0] ? categories[0].split('/').pop().trim() : '一般',
           language: info.language || 'ja',
           thumbnail: getThumbnailUrl(info.imageLinks),
           amazonLink: buildAmazonLink(info.industryIdentifiers, info.title, info.authors),
           googleBooksLink: info.infoLink || null,
           pageCount: info.pageCount || null,
           publishedDate: info.publishedDate ? info.publishedDate.slice(0, 4) : null,
+          params: paramsFromCategories(info.title, info.categories || []), // ここで一度だけ計算
         };
       })
       .filter(Boolean);
@@ -1259,13 +1268,8 @@ async function onFind() {
     setProgress('本のデータベースを検索中…');
     const { books, source } = await getCandidatePool();
 
-    // ── 各候補にパラメータを付与 ──
-    const candidates = books
-      .filter(b => !rejected.includes(b.title))
-      .map(b => ({
-        ...b,
-        params: b.params || paramsFromCategories(b.title, b.categories),
-      }));
+    // ── 各候補にパラメータを付与（fetchGoogleBooks/FALLBACK_BOOKSで既に計算済み） ──
+    const candidates = books.filter(b => !rejected.includes(b.title));
 
     if (candidates.length === 0) {
       rejected = []; // リセットして再試行
