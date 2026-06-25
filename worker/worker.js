@@ -233,6 +233,23 @@ async function saveLog(kv, entry) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// ハンドラ: 推薦ログの手動保存（/reason非経由での推薦時）
+// ═══════════════════════════════════════════════════════════
+async function handleLogSave(request, env, origin) {
+  const kv = env.RATE_LIMIT_KV;
+  let body;
+  try { body = await request.json(); } catch (e) {
+    return jsonResponse({ error: 'invalid JSON' }, 400, origin);
+  }
+  const { title1, title2, bookTitle, bookAuthor } = body;
+  if (!title1 || !bookTitle) {
+    return jsonResponse({ error: 'title1, bookTitle are required' }, 400, origin);
+  }
+  await saveLog(kv, { title1, title2: title2 || '', bookTitle, bookAuthor: bookAuthor || '' });
+  return jsonResponse({ ok: true }, 200, origin);
+}
+
 async function handleLogs(request, env, origin) {
   const kv = env.RATE_LIMIT_KV;
   const url = new URL(request.url);
@@ -582,6 +599,9 @@ export default {
       }
       if (url.pathname === '/status' && request.method === 'GET') {
         return await handleStatus(env, origin);
+      }
+      if (url.pathname === '/log' && request.method === 'POST') {
+        return await handleLogSave(request, env, origin);
       }
       if (url.pathname === '/logs' && request.method === 'GET') {
         return await handleLogs(request, env, origin);
