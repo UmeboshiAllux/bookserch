@@ -898,7 +898,10 @@ function getThumbnailUrl(imageLinks) {
   if (!imageLinks) return null;
   const url = imageLinks.thumbnail || imageLinks.smallThumbnail || null;
   if (!url) return null;
-  return url.replace(/^http:/, 'https:');
+  return url
+    .replace(/^http:/, 'https:')
+    .replace(/&edge=curl/g, '')
+    .replace(/zoom=\d+/, 'zoom=1');
 }
 
 function euclidean(a, b) {
