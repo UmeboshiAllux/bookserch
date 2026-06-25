@@ -32,7 +32,7 @@ const CONFIG = {
   // Claudeのモデル（コストを抑えるためHaikuを既定にする）
   CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
 
-  CLAUDE_MAX_TOKENS: 250,
+  CLAUDE_MAX_TOKENS: 150,  // 理由文2文に十分、250→150でトークン節約
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -170,13 +170,10 @@ async function handleReasonGeneration(request, env, origin) {
     return jsonResponse({ error: 'title1, title2, bookTitle are required' }, 400, origin);
   }
 
-  const prompt = `あなたは読書案内人です。以下の情報をもとに、推薦理由を2文程度の自然な日本語で書いてください。
-
-ユーザーが読んだ2冊: 「${title1}」「${title2}」
-今回推薦する本: 「${bookTitle}」（著者: ${bookAuthor || '不明'}）
-注目すべき共通点の軸: ${axisA || ''} / ${axisB || ''}
-
-説明文や前置きは不要です。推薦理由の本文のみを出力してください。`;
+  const prompt = `読んだ本:「${title1}」「${title2}」
+推薦:「${bookTitle}」（${bookAuthor || '不明'}）
+共通軸:${axisA || ''}/${axisB || ''}
+→推薦理由を2文以内の日本語で。前置き不要。`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -598,3 +595,4 @@ export default {
     }
   },
 };
+
