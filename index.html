@@ -675,6 +675,7 @@ const FALLBACK_BOOKS = [
 // ═══════════════════════════════════════════════════════════
 let rejected = [];
 let lastRec  = null;
+let lastInputTitles = ['', ''];
 let vec1 = PRESETS['ハーモニー'];
 let vec2 = PRESETS['ツインスターサイクロンランナウェイ'];
 let apiAvailable = null; // null=未検証, true/false
@@ -1320,6 +1321,7 @@ async function onFind() {
   const note1  = document.getElementById('b1note').value.trim();
   const note2  = document.getElementById('b2note').value.trim();
   if (!title1 || !title2) { showError('2冊のタイトルを入力してください'); return; }
+  lastInputTitles = [title1, title2];
 
   // 備考欄がある場合は検索クエリに付加（著者名等で絞り込む）
   const query1 = note1 ? `${title1} ${note1}` : title1;
@@ -1420,6 +1422,18 @@ function renderResult(book, dist, source, target) {
   // Amazonリンク（常に表示）
   const amazonEl = document.getElementById('r-amazon-link');
   amazonEl.href = book.amazonLink || `https://www.amazon.co.jp/s?k=${encodeURIComponent(book.title)}`;
+
+  // ログ送信（fire-and-forget）
+  fetch(`${PROXY_BASE_URL}/log`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title1: lastInputTitles[0],
+      title2: lastInputTitles[1],
+      bookTitle: book.title,
+      bookAuthor: book.author || '',
+    }),
+  }).catch(() => {});  // 失敗しても無視
 
   // Google Booksリンク
   const googleEl = document.getElementById('r-google-link');
